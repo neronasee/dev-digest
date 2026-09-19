@@ -9,6 +9,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { RunSummary } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
+import type { SeverityCounts } from "@/lib/severity";
 import { RunHistory } from "./RunHistory";
 
 afterEach(cleanup);
@@ -25,6 +26,7 @@ function run(o: Partial<RunSummary>): RunSummary {
     duration_ms: 1000,
     tokens_in: 100,
     tokens_out: 50,
+    cost_usd: 0.0013,
     findings_count: 0,
     grounding: "0/0 passed",
     ran_at: "2026-06-11T18:44:34.000Z",
@@ -34,10 +36,10 @@ function run(o: Partial<RunSummary>): RunSummary {
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+function renderRuns(runs: RunSummary[], severityByRun?: Record<string, SeverityCounts>) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
+      <RunHistory runs={runs} onOpenTrace={() => {}} severityByRun={severityByRun} />
     </NextIntlClientProvider>,
   );
 }
@@ -71,5 +73,55 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — run meta line (tokens + cost)", () => {
+  it("a settled run shows 'N tok · $x.xxxx' under its timestamp and a Trace link", () => {
+    renderRuns([run({ tokens_in: 12011, cost_usd: 0.0013 })]);
+    expect(screen.getByText("12,011 tok · $0.0013")).toBeInTheDocument();
+    expect(screen.getByText("Trace")).toBeInTheDocument();
+  });
+
+  it("an unpriced settled run shows the meta line with an em-dash cost", () => {
+    renderRuns([run({ cost_usd: null })]);
+    expect(screen.getByText("100 tok · —")).toBeInTheDocument();
+  });
+
+  it("a failed run shows no meta line", () => {
+    renderRuns([run({ status: "failed", error: "boom", cost_usd: null })]);
+    expect(screen.queryByText(/tok ·/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — severity pills (display-only)", () => {
+  it("a settled run shows its per-severity icon+count pills", () => {
+    renderRuns(
+      [run({ run_id: "run-1", status: "done", findings_count: 3, blockers: 1, score: 72 })],
+      { "run-1": { CRITICAL: 2, WARNING: 1, SUGGESTION: 0 } },
+    );
+    // Compact badges render icon + count only ("2" and "1" are unique in this
+    // tile: score is 72, findings text says "3 finding(s) · 1 blocker(s)").
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    // Zero-count severities get no pill.
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("pills are not interactive — the tile stays non-clickable", () => {
+    renderRuns(
+      [run({ run_id: "run-1", status: "done", findings_count: 2, blockers: 0, score: 88 })],
+      { "run-1": { CRITICAL: 2, WARNING: 0, SUGGESTION: 0 } },
+    );
+    // Only interactive elements in the tile are the agent-name button and the
+    // Trace link — no severity pill carries a role.
+    expect(screen.queryByRole("button", { name: /critical/i })).not.toBeInTheDocument();
+  });
+
+  it("runs without severity data (failed / no review yet) render no pills", () => {
+    renderRuns([run({ status: "failed", error: "boom", score: null })]);
+    // No compact badges: the only numbers are tokens/cost in the meta line…
+    // which failed runs don't render — so no bare count digits at all.
+    expect(screen.queryByText("2")).not.toBeInTheDocument();
   });
 });

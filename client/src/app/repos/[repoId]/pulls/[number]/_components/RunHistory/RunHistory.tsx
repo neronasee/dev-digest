@@ -2,8 +2,10 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
+import { Badge, Icon, CircularScore, MonoLink, SeverityBadge, type IconName } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
+import { formatCost } from "@/lib/cost";
+import { SEVERITY_KEYS, type SeverityCounts } from "@/lib/severity";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -47,19 +49,6 @@ const rowStyle: React.CSSProperties = {
   textAlign: "left",
 };
 
-const iconBtnStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 4,
-  borderRadius: 5,
-  border: "1px solid var(--border)",
-  background: "var(--bg-surface)",
-  color: "var(--text-muted)",
-  cursor: "pointer",
-  flexShrink: 0,
-};
-
 // Commits are markers, not actions — lighter (dashed, transparent) so they read
 // as separators between the runs they sit chronologically between.
 const commitRowStyle: React.CSSProperties = {
@@ -90,6 +79,7 @@ export function RunHistory({
   onOpenTrace,
   onGoToReview,
   onDelete,
+  severityByRun,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
@@ -98,6 +88,9 @@ export function RunHistory({
   /** Jump to this run's inline review accordion below (clicking the agent name). */
   onGoToReview?: (runId: string) => void;
   onDelete?: (runId: string) => void;
+  /** Per-run severity tallies (derived client-side from the PR's reviews).
+   *  Display-only — the tiles themselves stay non-clickable. */
+  severityByRun?: Record<string, SeverityCounts>;
 }) {
   const t = useTranslations("prReview");
   if (runs.length === 0 && commits.length === 0) return null;
@@ -149,6 +142,7 @@ export function RunHistory({
         const r = item.run;
         const o = outcomeOf(r);
         const settled = r.status === "done";
+        const sevCounts = severityByRun?.[r.run_id];
         return (
           <div key={`run:${r.run_id}`} style={rowStyle}>
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
@@ -189,24 +183,34 @@ export function RunHistory({
                 </div>
               )}
               {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
-                  {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    {t("runStatus.findings", { count: r.findings_count ?? 0 })}
+                    {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
+                  </span>
+                  {sevCounts &&
+                    SEVERITY_KEYS.filter((k) => sevCounts[k] > 0).map((k) => (
+                      <SeverityBadge key={k} severity={k} count={sevCounts[k]} compact />
+                    ))}
                 </div>
               )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>
               {r.ran_at && <span>{new Date(r.ran_at).toLocaleTimeString()}</span>}
+              {settled && r.tokens_in != null && (
+                <span className="mono tnum">
+                  {t("timeline.runMeta", {
+                    tokens: r.tokens_in.toLocaleString(),
+                    cost: formatCost(r.cost_usd),
+                  })}
+                </span>
+              )}
             </div>
-            <button
-              type="button"
-              title={t("timeline.openTrace")}
-              aria-label={t("timeline.openTrace")}
+            <MonoLink
               onClick={() => onOpenTrace(r.run_id)}
-              style={iconBtnStyle}
             >
-              <Icon.FileText size={13} />
-            </button>
+              {t("timeline.trace")}
+            </MonoLink>
             {onDelete && r.status !== "running" && (
               <span
                 role="button"

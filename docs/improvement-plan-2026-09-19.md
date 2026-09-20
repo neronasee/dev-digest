@@ -8,10 +8,13 @@
 > `INSIGHTS.md`. 64 verified findings (every one read in code, file:line
 > cited), organized into 4 parallelizable tracks.
 >
-> **Status: Wave 0 ✅ landed 2026-09-19** (all tracks; see the wave board).
-> **Live ratchet:** depcruise **0 errors / 14 warnings** — was 125 modules / 375
-> deps, now **145 / 454** after R5 made npm edges visible to the rules (same
-> 14-warning baseline) → target per wave below.
+> **Status: Waves 0–1 ✅ landed** (Wave 0 on 2026-09-19, Wave 1 on
+> 2026-09-20); Wave 2 next.
+> **Live ratchet:** depcruise **0 errors / 5 warnings** — 155 modules / 480
+> deps. History: 125/375 pre-R5 (npm edges invisible) → 145/454 at the same
+> 14 warnings → Wave-1 burn-down (B1/B5/B13/B15) to 0 db-confined + 0
+> cross-module, both rules **promoted to error** at the ratchet event → 5
+> no-circular warnings remain (→ 4 after Wave-2 B14, the accepted floor).
 
 ## 0. How to use this plan
 
@@ -48,8 +51,8 @@ harden contracts/tenancy third once module shapes are final.
 | Wave | Goal | Items | Tracks | Est. (ideal eng-days) | Status |
 |---|---|---|---|---|---|
 | **0 — Safety net & ratchet** | Stop active correctness bugs, lock the vendor contract, make regressions mechanically detectable — before any file moves. Unlimited parallelism (all items disjoint). | X1, X3, X4, X8, X9, X10 · B4+B19+B21 (one migration batch), B8+B17 (one PR), B6, B9, B18, B22 · F2 (codemod first!), F7, F8, F9, F10, F14, F17, F18 · R5, R8, R9, R10, R11 | X, BE, FE, CORE | ~9–11 | ✅ 2026-09-19 |
-| **1 — Structural burn-down** | Execute the repo's own depcruise ratchet (`enforcement.md`) + the FE equivalents. Parallel by package; sequenced within BE. | BE-A: **B1 cluster** (B1+B2+B10a+B11+B24) → B15 → **B3**; BE-B (2nd engineer): B5+B10b; B13 · FE-A: F3 → F15; FE-B: F4 → F5 → F11 → F12 → F13 · CORE: R6, R7, R12 · e2e: X6 → X5, X7 | BE, FE, CORE, e2e | ~18–22 | ☐ |
-| **Wave-1 ratchet event** | Promote `db-confined-to-repositories` and `no-cross-module-internals` to **error** in `server/.dependency-cruiser.cjs`; update the baseline in `onion-architecture/enforcement.md`. **14 → 4 warnings** (only the 4 container-root circulars remain — accepted per §9). | — | BE | 0.5 | ☐ |
+| **1 — Structural burn-down** | Execute the repo's own depcruise ratchet (`enforcement.md`) + the FE equivalents. Parallel by package; sequenced within BE. | BE-A: **B1 cluster** (B1+B2+B10a+B11+B24) → B15 → **B3**; BE-B (2nd engineer): B5+B10b; B13 · FE-A: F3 → F15; FE-B: F4 → F5 → F11 → F12 → F13 · CORE: R6, R7, R12 · e2e: X6 → X5, X7 | BE, FE, CORE, e2e | ~18–22 | ✅ 2026-09-20 |
+| **Wave-1 ratchet event** | Promote `db-confined-to-repositories` and `no-cross-module-internals` to **error** in `server/.dependency-cruiser.cjs`; update the baseline in `onion-architecture/enforcement.md`. **14 → 5 warnings** (the 5 no-circulars; the plan's earlier "→ 4" miscounted — B14 is a Wave-2 item and brings 5 → 4, the accepted floor). | — | BE | 0.5 | ✅ 2026-09-20 |
 | **2 — Contracts, tenancy, test depth** | Harden surfaces now that shapes are stable: response serialization, workspace scoping, and the test infra deferred past the structural churn. Wave gate: full e2e regression. | B7 (final sweep), B12, B14+B23 (one PR), B16, B20 · F19 → F20+X2 (merged) → F21 → F22 | BE, FE | ~8–12 | ☐ |
 | 3 — *Optional polish* (not committed — see §9) | Container-cycle policy, segment error boundary, cosmetic alignment. | F16, F6, X11, segment-level `error.tsx` under `pulls/[number]/`, F2 ESLint tooling | — | ~4–6 | ☐ |
 

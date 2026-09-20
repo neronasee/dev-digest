@@ -96,12 +96,13 @@ module.exports = {
     },
 
     // Drizzle queries belong in repository files (repository.ts / *.repo.ts).
-    // Warn burn-down: the fat-route modules and a few helpers still query
-    // db/schema directly — see enforcement.md for the list.
+    // Promoted warn → error at the Wave-1 ratchet event (2026-09-20): the
+    // burn-down reached zero (B1 pulls, B5 polling/workspace/settings, B15
+    // row-type imports). See enforcement.md for the ledger.
     {
       name: 'db-confined-to-repositories',
-      comment: 'SQL lives in repositories — moves of db/schema imports out of routes/helpers shrink this',
-      severity: 'warn',
+      comment: 'SQL lives in repositories — no module file outside a repository may import db/schema or drizzle-orm',
+      severity: 'error',
       from: {
         path: 'src/modules/',
         pathNot: 'src/modules/[^/]+/repository',
@@ -113,10 +114,13 @@ module.exports = {
     // (container.agentsRepo / container.reviewRepo / container.repoIntel) or
     // modules/_shared — never a direct ../<other-module>/ import. $1
     // back-references the from-module so same-module imports are allowed.
+    // Promoted warn → error at the Wave-1 ratchet event (2026-09-20): the
+    // single edge (repos → repo-intel constants) was hoisted to _shared
+    // (B13). See enforcement.md for the ledger.
     {
       name: 'no-cross-module-internals',
       comment: 'cross-module imports go via the container or _shared — hoist the shared piece',
-      severity: 'warn',
+      severity: 'error',
       from: { path: '^src/modules/([^/]+)/' },
       to: {
         path: '^src/modules/([^/]+)/',

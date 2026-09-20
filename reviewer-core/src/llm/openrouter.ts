@@ -64,6 +64,10 @@ export class OpenRouterProvider implements LLMProvider {
     let tokensOut = 0;
     let costFromApi: number | null = null;
     let lastRaw = '';
+    // Last schema-validation failure from parseWithRepair (structured.ts's
+    // formatted issue list) — carried into the final thrown error so callers
+    // see WHY the last attempt was rejected, not just that it was.
+    let lastParseError: string | undefined;
 
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       const res = await this.client.chat.completions.create({
@@ -111,8 +115,12 @@ export class OpenRouterProvider implements LLMProvider {
       }
       messages.push({ role: 'assistant', content: lastRaw });
       messages.push({ role: 'user', content: parsed.repromptMessage });
+      lastParseError = parsed.error;
     }
-    throw new Error(`OpenRouter structured output failed schema validation for ${req.schemaName}`);
+    throw new Error(
+      `OpenRouter structured output failed schema validation for ${req.schemaName}` +
+        (lastParseError ? `: ${lastParseError}` : ''),
+    );
   }
 
   /**

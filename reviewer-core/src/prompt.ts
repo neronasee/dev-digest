@@ -36,6 +36,17 @@ export function wrapUntrusted(label: string, content: string): string {
 /** Cap the PR description so a huge author body can't blow the token budget. */
 const MAX_PR_DESCRIPTION_CHARS = 4000;
 
+/**
+ * Truncate to the cap, marking the cut when it happens: the model must be able
+ * to tell a truncated untrusted body from a complete one (a silent slice looks
+ * like the author's own final sentence). The marker is appended INSIDE the
+ * untrusted-wrapped block, so it reads as data, not instructions.
+ */
+export function clampPrDescription(body: string): string {
+  if (body.length <= MAX_PR_DESCRIPTION_CHARS) return body;
+  return `${body.slice(0, MAX_PR_DESCRIPTION_CHARS)}\n[description truncated at ${MAX_PR_DESCRIPTION_CHARS} chars]`;
+}
+
 export interface PromptParts {
   /** Agent's system prompt (trusted). */
   system: string;
@@ -98,7 +109,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
 
   const prDescription =
     parts.prDescription && parts.prDescription.trim().length > 0
-      ? parts.prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS)
+      ? clampPrDescription(parts.prDescription)
       : undefined;
 
   const userSections: string[] = [];

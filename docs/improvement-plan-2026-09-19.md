@@ -8,13 +8,14 @@
 > `INSIGHTS.md`. 64 verified findings (every one read in code, file:line
 > cited), organized into 4 parallelizable tracks.
 >
-> **Status: Waves 0–1 ✅ landed** (Wave 0 on 2026-09-19, Wave 1 on
-> 2026-09-20); Wave 2 next.
-> **Live ratchet:** depcruise **0 errors / 5 warnings** — 155 modules / 480
-> deps. History: 125/375 pre-R5 (npm edges invisible) → 145/454 at the same
-> 14 warnings → Wave-1 burn-down (B1/B5/B13/B15) to 0 db-confined + 0
-> cross-module, both rules **promoted to error** at the ratchet event → 5
-> no-circular warnings remain (→ 4 after Wave-2 B14, the accepted floor).
+> **Status: Waves 0–2 ✅ landed** (2026-09-19 / 2026-09-20 / 2026-09-20).
+> Committed scope complete — only Wave 3 optional polish remains (§9).
+> **Live ratchet (final floor):** depcruise **0 errors / 4 warnings** — 155
+> modules / ~487 deps. History: 125/375 pre-R5 (npm edges invisible) →
+> 145/454 at the same 14 warnings → Wave-1 burn-down (B1/B5/B13/B15) to 0
+> db-confined + 0 cross-module, both rules **promoted to error** → 5
+> no-circular → Wave-2 B14 removed the agents cycle → **4** (all four are
+> the accepted composition-root cycles, §9).
 
 ## 0. How to use this plan
 
@@ -40,7 +41,7 @@ Verification lanes used in the tables below (full matrix in §7):
 **BE-db-lane** = `pnpm exec vitest run *.it.test` (needs Docker) ·
 **FE-lane** = `cd client && pnpm typecheck && pnpm test` ·
 **CORE-lane** = `cd reviewer-core && npm run typecheck && npm test` ·
-**depcruise** = `cd server && pnpm depcruise:all` · **e2e** = `./scripts/e2e.sh && (cd e2e && npm test)`.
+**depcruise** = `cd server && pnpm depcruise:all` · **e2e** = `./scripts/e2e.sh` (hermetic: boots the isolated stack, runs the flows, tears down — a complete gate on its own; the Wave-0 run confirmed chaining `(cd e2e && npm test)` after it re-runs the flows against the **dev** stack on :3000, which `e2e/CLAUDE.md` documents as unsafe unless the dev DB holds only the seeded repo — 4 content-dependent flows fail spuriously).
 
 ## 1. Wave board
 
@@ -53,7 +54,7 @@ harden contracts/tenancy third once module shapes are final.
 | **0 — Safety net & ratchet** | Stop active correctness bugs, lock the vendor contract, make regressions mechanically detectable — before any file moves. Unlimited parallelism (all items disjoint). | X1, X3, X4, X8, X9, X10 · B4+B19+B21 (one migration batch), B8+B17 (one PR), B6, B9, B18, B22 · F2 (codemod first!), F7, F8, F9, F10, F14, F17, F18 · R5, R8, R9, R10, R11 | X, BE, FE, CORE | ~9–11 | ✅ 2026-09-19 |
 | **1 — Structural burn-down** | Execute the repo's own depcruise ratchet (`enforcement.md`) + the FE equivalents. Parallel by package; sequenced within BE. | BE-A: **B1 cluster** (B1+B2+B10a+B11+B24) → B15 → **B3**; BE-B (2nd engineer): B5+B10b; B13 · FE-A: F3 → F15; FE-B: F4 → F5 → F11 → F12 → F13 · CORE: R6, R7, R12 · e2e: X6 → X5, X7 | BE, FE, CORE, e2e | ~18–22 | ✅ 2026-09-20 |
 | **Wave-1 ratchet event** | Promote `db-confined-to-repositories` and `no-cross-module-internals` to **error** in `server/.dependency-cruiser.cjs`; update the baseline in `onion-architecture/enforcement.md`. **14 → 5 warnings** (the 5 no-circulars; the plan's earlier "→ 4" miscounted — B14 is a Wave-2 item and brings 5 → 4, the accepted floor). | — | BE | 0.5 | ✅ 2026-09-20 |
-| **2 — Contracts, tenancy, test depth** | Harden surfaces now that shapes are stable: response serialization, workspace scoping, and the test infra deferred past the structural churn. Wave gate: full e2e regression. | B7 (final sweep), B12, B14+B23 (one PR), B16, B20 · F19 → F20+X2 (merged) → F21 → F22 | BE, FE | ~8–12 | ☐ |
+| **2 — Contracts, tenancy, test depth** | Harden surfaces now that shapes are stable: response serialization, workspace scoping, and the test infra deferred past the structural churn. Wave gate: full e2e regression. | B7 (final sweep), B12, B14+B23 (one PR), B16, B20 · F19 → F20+X2 (merged) → F21 → F22 | BE, FE | ~8–12 | ✅ 2026-09-20 |
 | 3 — *Optional polish* (not committed — see §9) | Container-cycle policy, segment error boundary, cosmetic alignment. | F16, F6, X11, segment-level `error.tsx` under `pulls/[number]/`, F2 ESLint tooling | — | ~4–6 | ☐ |
 
 **Committed scope (Waves 0–2): ~38–44 ideal engineer-days** — solo part-time
@@ -121,7 +122,7 @@ the house pattern; test-lane split fully compliant; typecheck clean.
 | B9 | med | S | 0 | `platform/sse.ts:76-88` — `complete()` never evicts `buffers`/`seq`/`completed`; every run's full event buffer lives for the process lifetime → on `complete()`, schedule unref'd `setTimeout` (5–15 min) deleting entries; cancel if runId reused | BE-lane | Independent |
 | B10 | med | S | 1 | Per-row upsert loops: `pulls/routes.ts:52-80` (B10a → folded into B1), `polling/routes.ts:31-59` + `settings/routes.ts:52-60` (B10b → folded into B5) → single multi-row `insert(...).values(rows).onConflictDoUpdate(...)` with `sql`excluded`` | BE-lane | Folded into B1 / B5 |
 | B11 | med | M | 1 | `GET /repos/:id/pulls` performs a full GitHub sync + up to 10 **sequential** `getPullRequest` fetches + per-row updates — side-effectful read path, external N+1 → move sync/stat backfill into the `polling` job (or opportunistic background enqueue); GET becomes a pure read | BE-lane + BE-db-lane | Folded into B1 |
-| B12 | med | M | 2 | Unscoped tenancy: `cancelRun`/`getRunTrace` filter by run id only (`reviews/routes.ts:114-126`, `run.repo.ts:94-101,204-207`); repo-intel routes act on any `repoId` (`repo-intel/routes.ts:32-65`). Latent today (LocalNoAuthProvider) but the seam must hold before a real AuthProvider → thread `workspaceId` through; verify repo ownership via scoped `repos` lookup | BE-db-lane | After B3 (uses widened helpers); rides the reviews pass |
+| B12 | med | M | 2 | Unscoped tenancy: `cancelRun`/`getRunTrace` filter by run id only (`reviews/routes.ts:114-126`, `run.repo.ts:94-101,204-207`); repo-intel routes act on any `repoId` (`repo-intel/routes.ts:32-65`). Latent today (LocalNoAuthProvider) but the seam must hold before a real AuthProvider → thread `workspaceId` through; verify repo ownership via scoped `repos` lookup (**landed**: foreign/unknown run → 404 with no bus publish; **residual seam**: `GET /runs/:id/events` SSE subscribes by runId only, no workspace check — accepted for now, close it when a real AuthProvider lands) | BE-db-lane | After B3 (uses widened helpers); rides the reviews pass |
 | B13 | low | S | 1 | `repos/service.ts:11-14` imports repo-intel job-kind constants — the one `no-cross-module-internals` edge → hoist constants to `modules/_shared/` | depcruise (cross-module edge → 0) | **Gates the Wave-1 ratchet promotion**; same owner as depcruise config changes |
 | B14 | low | S | 2 | Genuine import cycle `agents/helpers.ts:3` ↔ `agents/repository.ts:6` → import `AgentRow`/`AgentVersionRow` from `db/rows.ts` in helpers (already exported) — one line | depcruise (circulars 5 → 4) | One PR with B23 (same file) |
 | B15 | low | S | 1 | `run-executor.ts:5`, `diff-loader.ts:4`, `repos/helpers.ts:2` import `db/schema.js` just for row types → export `RepoRow` etc. from `db/rows.ts` (its doc-comment says it exists for this) | depcruise (db-confined −3 files) | **Lands just before B3** (B3's tx-widening imports from `db/rows.ts`) |
@@ -216,8 +217,8 @@ clean.
 | F8 | med | S | 0 | ConfigTab stores 9 props-derived states + a reset `useEffect` with `eslint-disable react-hooks/exhaustive-deps` (`ConfigTab.tsx:18-39`) — "derive, don't store" violation → remount on agent switch: `<ConfigTab key={agent.id} …>` in `AgentEditor.tsx:23`, delete the effect | FE-lane | Independent |
 | F9 | med | S | 0 | Index key on a mutable list (`DiffViewer.tsx:28` `key={i}`) — a refetch after new commits reshuffles files and bleeds row state → `key={f.path}` | FE-lane | Independent, one line |
 | F15 | med | M–L | 1 | Page-level `'use client'` on 5 routes blocks `metadata` (root, onboarding, pulls list, pulls detail, agents/[id]) → mirror the `agents/page.tsx` thin-server-page shape (params/searchParams handling moves into the view); enables per-route titles via `title.template` | FE-lane + `pnpm build` (Next validates the RSC boundary at build time) | After F3 (same files); [details](#f15--thin-server-pages--metadata) |
-| F19 | med | M | 2 | `fireEvent` everywhere (16 call sites / 4 files); `@testing-library/user-event` not installed → add the devDep (`pnpm install` — the only FE lockfile touch), convert click/hover/keyboard (synthetic `fireEvent.scroll` may remain) | FE-lane | After structure settles (tests move with F3/F5) |
-| F20 | med | M | 2 | The "fetch mocked" convention has **no implementation** — no stub/MSW anywhere; a missed mock hits `localhost:3001` for real; `useRunEvents` SSE accumulation untested → default fetch stub in `src/test/setup.ts` that fails tests hitting real URLs + `renderHook` test for `useRunEvents` with a fake `EventSource`; **merge with X2** (same file) | FE-lane + new hook test | After F19; [details](#f20x2--fetch-stub--sse-validation-merged-unit) |
+| F19 | med | M | 2 | `fireEvent` everywhere (landed: 18 of 20 sites converted at current HEAD — the plan's 16/4 predates F3/F5 moving tests; 2 `fireEvent.scroll` remain, sanctioned); **discovery**: RTL 16 hangs forever under vitest fake timers until setup bridges `jest.advanceTimersByTime` → `vi` (RTL's asyncWrapper detects jest's clock only) | FE-lane | After structure settles (tests move with F3/F5) |
+| F20 | med | M | 2 | The "fetch mocked" convention has **no implementation** — no stub/MSW anywhere; a missed mock hits `localhost:3001` for real; `useRunEvents` SSE accumulation untested → default fetch stub in `src/test/setup.ts` that fails tests hitting real URLs + `renderHook` test for `useRunEvents` with a fake `EventSource`; **merge with X2** (same file). **Landed**: throwing default fetch + `vi.stubGlobal` opt-out + global `afterEach(unstubAllGlobals)`; zero existing tests were silently hitting real fetch | FE-lane + new hook test | After F19; [details](#f20x2--fetch-stub--sse-validation-merged-unit) |
 | F10 | low | S | 0 | Filter/sort state split URL vs `useState`, contradicting the file's own comment (`pulls/page.tsx:2` vs :46-47) → move `sort` (± `q`) into `searchParams` like `status` | FE-lane | After F2, before F15 (same file) |
 | F11 | low | S–M | 1 | Nonce-driven effect chain timeline→accordion scroll (`FindingsTab.tsx:70-73` → `ReviewRunAccordion.tsx:47-53`) → the accordion already renders `id="review-run-<runId>"`; scroll directly via `document.getElementById(...)?.scrollIntoView()` on click, delete the nonce prop through both components | FE-lane | After F5 |
 | F12 | low | S | 1 | Pass-through `useCallback` wrappers (`FindingsTab.tsx:45-65`, `PrDetailHeader.tsx:31-37`) → pass props directly | FE-lane | After F5 |
@@ -225,8 +226,8 @@ clean.
 | F16 | low | opt | 3 | Root route redirects via client fetch + effect (`page.tsx:13-19`) → server-fetch + `redirect()` would fix it but conflicts with the TanStack-only data convention | — | **Decision log: skip** |
 | F17 | low | S | 0 | Inter webfont never actually loaded (`globals.css:7-12` — `src: local("Inter")` only resolves if the user has it installed) → `next/font` (`google` or `local`) exposed as a CSS variable | FE-lane | Independent |
 | F18 | low | S | 0 | No `not-found.tsx` anywhere → add root `not-found.tsx` wrapped in the app shell | FE-lane | Independent |
-| F21 | low | S | 2 | `vi.mock` with 5–7-level relative paths (the alias resolves in vitest config) → use `@/lib/hooks/…` in mocks | FE-lane | Ride with F19 |
-| F22 | low | M | 2 | Render-only smokes for interaction-critical components (`RunReviewDropdown`, `AgentEditor`, `VerdictBanner`) → add "open dropdown → choose agent → mutate called" flow tests | FE-lane | After F20 |
+| F21 | low | S | 2 | `vi.mock` with 5–7-level relative paths (the alias resolves in vitest config) → use `@/lib/hooks/…` in mocks (**already satisfied** — the Wave-0 F2 codemod rewrote mock strings in lockstep; nothing left) | FE-lane | Ride with F19 |
+| F22 | low | M | 2 | Render-only smokes for interaction-critical components (`RunReviewDropdown`, `AgentEditor`, `VerdictBanner`) → add "open dropdown → choose agent → mutate called" flow tests (**landed** for dropdown + editor; VerdictBanner skipped — genuinely pure display, no interaction to invent) | FE-lane | After F20 |
 | F6 | low | opt | 3 | Shared-component folder shape inconsistent (flat files vs `<Name>/` subfolder+barrel in `src/components/`) | — | **Decision log: skip** (low value, many moves) |
 | F7 | low | S | 0 | `src/components/showcase` is test-only code in the shared layer with a stale header comment (`Showcase.tsx:2` claims a `/showcase` route that doesn't exist) → relocate under `src/test/`, fix the comment | FE-lane | Independent |
 
@@ -302,7 +303,7 @@ lane plus dependent lanes).
 | FE | `cd client && pnpm typecheck && pnpm test` · `pnpm build` after F15 | F14: test rendering a throwing child asserts fallback + reset. F20: default fetch stub that **fails any test hitting a real URL**; `useRunEvents` renderHook test with fake `EventSource` (X2's regression test) |
 | CORE | `cd reviewer-core && npm run typecheck && npm test` (R10 makes an empty suite fail again) · `cd server && pnpm depcruise:all` covers `core-is-pure` incl. R5's new paths | R6: map-reduce chunking test (≥2 `completeStructured` calls, merged result). R7: grounding/structured edge-branch pins. R12: malformed-hunk fixture asserting the error surfaces at run entry |
 | X / e2e | `diff -rq server/src/vendor/shared client/src/vendor/shared` empty · `cd e2e && npm run typecheck` | X1's `diff -rq` CI step in **both** `server-unit.yml` and `client.yml`; X6's FlowSchema makes a typo'd spec a named, file-attributed error |
-| Wave gate | — | After **every** wave: full `./scripts/e2e.sh && (cd e2e && npm test)` — the only suite that exercises server contracts and client rendering together, i.e. exactly where X1/B7/F15 regressions surface |
+| Wave gate | — | After **every** wave: full `./scripts/e2e.sh` — the only suite that exercises server contracts and client rendering together (boot + flows + teardown in one), i.e. exactly where X1/B7/F15 regressions surface. Do NOT chain `e2e && npm test`: the second leg targets the dev stack and fails on any dev DB beyond the seed (documented in e2e/CLAUDE.md) |
 
 ## 8. Ratchet ledger
 

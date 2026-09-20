@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { RunBus } from './sse.js';
 
 /** Hermetic (no DB, fake timers): the completed-run replay state must be
- *  evicted after its retention window, and runId reuse must cancel the
- *  eviction. Late-subscriber replay-then-end semantics stay intact meanwhile. */
+ *  evicted after its retention window. Late events from a finishing executor
+ *  and late-subscriber replay-then-end semantics stay intact meanwhile. */
 describe('RunBus replay eviction', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -25,19 +25,25 @@ describe('RunBus replay eviction', () => {
     expect(bus.isComplete('run-1')).toBe(false); // completed marker evicted
   });
 
-  it('re-publishing the same runId cancels the pending eviction', () => {
+  it('preserves late executor events published after cancellation completes the stream', async () => {
     const bus = new RunBus();
     bus.publish('run-1', 'info', 'first');
     bus.complete('run-1');
 
-    // The id is reused by a new run before the window expires:
-    bus.publish('run-1', 'info', 'second');
-    expect(vi.getTimerCount()).toBe(0); // eviction cancelled
+    const event = bus.publish('run-1', 'error', 'Run cancelled by user');
+    expect(vi.getTimerCount()).toBe(1);
+    expect(event.seq).toBe(2);
+    expect(bus.isComplete('run-1')).toBe(true);
+    expect(bus.buffer('run-1').map((e) => e.msg)).toEqual([
+      'first',
+      'Run cancelled by user',
+    ]);
 
-    vi.advanceTimersByTime(10 * 60 * 1000);
-
-    // Nothing evicted — the new run's state (incl. the old buffer) survives.
-    expect(bus.buffer('run-1').map((e) => e.msg)).toEqual(['first', 'second']);
+    let done = false;
+    const offDone = bus.onDone('run-1', () => (done = true));
+    await Promise.resolve();
+    expect(done).toBe(true);
+    offDone();
   });
 
   it('a repeated complete() restarts the eviction window', () => {

@@ -72,6 +72,7 @@ export class PollingRepository {
           status: sql`excluded.status`,
           updatedAt: sql`excluded.updated_at`,
         },
+        setWhere: sql`${t.pullRequests.updatedAt} is null or excluded.updated_at >= ${t.pullRequests.updatedAt}`,
       });
     return rows.length;
   }

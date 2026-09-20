@@ -62,7 +62,7 @@ pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type dot | dot
 
 ## Baseline (2026-09-20, after the Wave-2 B14 fix)
 
-**0 errors, 4 warnings — 155 modules, 482 dependencies.**
+**0 errors, 4 warnings — 155 modules, 487 dependencies.**
 
 History: 2026-09-19 baseline was **0 errors / 14 warnings / 145 modules /
 454 deps** (the 2026-09-19 R5 fix had already dropped `node_modules` from

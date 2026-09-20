@@ -39,6 +39,7 @@ export interface SyncJobPayload {
  */
 export class PullsService {
   private pulls: PullsRepository;
+  private syncsInFlight = new Set<string>();
 
   constructor(private container: Container) {
     this.pulls = container.pullsRepo;
@@ -110,21 +111,30 @@ export class PullsService {
    *  the job's `done` is deliberately not — a failed sync must never fail
    *  or slow the read that triggered it. */
   private async enqueueSyncIfStale(repo: RepoRow, log: Logger): Promise<void> {
+    const age = repo.lastPolledAt ? Date.now() - repo.lastPolledAt.getTime() : Infinity;
+    if (age <= SYNC_STALE_MS) return;
+    if (this.syncsInFlight.has(repo.id)) return;
+    this.syncsInFlight.add(repo.id);
+
     try {
       await this.container.github();
     } catch {
+      this.syncsInFlight.delete(repo.id);
       return; // No token / offline — serve persisted PRs, don't even enqueue.
     }
-    const age = repo.lastPolledAt ? Date.now() - repo.lastPolledAt.getTime() : Infinity;
-    if (age <= SYNC_STALE_MS) return;
     try {
       const job = await this.container.jobs.enqueue(repo.workspaceId, SYNC_JOB_KIND, {
         repoId: repo.id,
       } satisfies SyncJobPayload);
-      job.done.catch((err) => {
-        log.warn({ err }, 'background PR sync job failed (see jobs table)');
-      });
+      void job.done
+        .catch((err) => {
+          log.warn({ err }, 'background PR sync job failed (see jobs table)');
+        })
+        .finally(() => {
+          this.syncsInFlight.delete(repo.id);
+        });
     } catch (err) {
+      this.syncsInFlight.delete(repo.id);
       log.warn({ err }, 'background PR sync enqueue skipped');
     }
   }
@@ -132,8 +142,9 @@ export class PullsService {
   /**
    * The `pulls-sync` job body: sync the PR list from GitHub (one multi-row
    * upsert), then backfill diff stats for zero-stat PRs from the detail
-   * endpoint (bounded per run), then bump last_polled_at. Every step
-   * degrades to a warn — a partial sync leaves persisted PRs intact.
+   * endpoint (bounded per run), then bump last_polled_at. Failure to fetch the
+   * list rejects the job so JobRunner records/retries it; optional stat
+   * backfills still degrade to warnings and leave persisted PRs intact.
    */
   async runSyncJob(payload: SyncJobPayload, log: Logger = silentLogger): Promise<{ synced: number }> {
     const repo = await this.pulls.getRepoById(payload.repoId);
@@ -143,9 +154,8 @@ export class PullsService {
     try {
       gh = await this.container.github();
     } catch (err) {
-      log.warn({ err }, 'GitHub client unavailable; skipping PR sync job');
-      await this.pulls.markSynced(repo.id);
-      return { synced: 0 };
+      log.warn({ err }, 'GitHub client unavailable; failing PR sync job');
+      throw err;
     }
 
     let synced = 0;
@@ -153,7 +163,8 @@ export class PullsService {
       const page = await gh.listPullRequests({ owner: repo.owner, name: repo.name });
       synced = await this.pulls.upsertFromGitHub(repo.workspaceId, repo.id, page);
     } catch (err) {
-      log.warn({ err }, 'GitHub PR sync skipped (offline / error); keeping persisted PRs');
+      log.warn({ err }, 'GitHub PR sync failed; keeping persisted PRs for the read path');
+      throw err;
     }
 
     // Diff stats aren't on GitHub's PR-list payload, so freshly-imported PRs

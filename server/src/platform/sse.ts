@@ -56,9 +56,6 @@ export class RunBus {
 
   /** Publish a live event for a run. Returns the constructed RunEvent. */
   publish(runId: string, kind: RunEventKind, msg: string, data?: unknown): RunEvent {
-    // A publish while an eviction is pending means the runId was reused by a
-    // new run — cancel the eviction so the new run's state is not yanked out.
-    this.cancelEviction(runId);
     const e = this.emitterFor(runId);
     const next = (this.seq.get(runId) ?? 0) + 1;
     this.seq.set(runId, next);
@@ -83,7 +80,7 @@ export class RunBus {
 
   /** Signal completion and release emitters. Replay state (buffer/seq/
    *  completed marker) stays for late subscribers, then is evicted after
-   *  REPLAY_RETENTION_MS (re-publishing the runId cancels the eviction). */
+   *  REPLAY_RETENTION_MS. */
   complete(runId: string): void {
     const e = this.emitters.get(runId);
     this.completed.add(runId);

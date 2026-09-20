@@ -14,7 +14,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-20 — The enforced "fetch mocked" rule: setup.ts installs a throwing default `globalThis.fetch` (error names the URL), and tests opt out per test with `vi.stubGlobal("fetch", vi.fn(...))` — the setup's global `afterEach(vi.unstubAllGlobals)` restores the thrower between tests, so a mock never leaks and a missed mock fails loudly instead of hitting localhost:3001. (src/test/setup.ts)
 
 ## What Doesn't Work
 
@@ -27,6 +27,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-19 — `@/*` maps to `src/*` ONLY, so the 11 test imports of `messages/**/*.json` can never be alias-rewritten — their deep relative paths are the accepted residue of the F2 codemod, not missed sites; fixing them would need a second tsconfig/vitest alias (e.g. `@messages/*`). (src/app/**/*.test.tsx, tsconfig.json paths)
+- 2026-09-19 — `app/global-error.tsx` replaces the ROOT layout, so it must be self-contained: plain English strings (no next-intl provider exists there — `useTranslations` throws), inline hard-coded colors (globals.css / the UI kit's CSS variables aren't guaranteed), own `<html><body>`; `app/error.tsx` renders INSIDE the intact root layout and can use the kit + translations. (src/app/global-error.tsx:1)
 - 2026-09-16 — Fixed-decimal cost formatting rounds REAL OpenRouter costs to "$0.000" (haiku-class runs on small diffs cost $0.0001–0.0004, below 3-decimal resolution) — `formatCost` therefore keeps 2 significant digits with 2–6 decimals ($0.060 / $0.0013 / $0.000038), superseding the earlier fixed 3/4-decimal rule. (src/lib/cost.ts)
 - 2026-09-16 — USD cost renders null as an em-dash, never `$0.00` — an unpriced model or a run that failed before billing is unknown, not free; formatting lives in `src/lib/cost.ts` (3 decimals under $1 for badges/stats, 4 for the per-run timeline meta). (src/lib/cost.ts)
 
@@ -34,6 +36,11 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-20 — The vendored shared contracts use the ESM `.js`-extension import style, which tsc and vitest resolve to `.ts` natively but webpack does NOT — the first RUNTIME import of the barrel (reviews.ts importing the RunEvent schema) failed `next dev`/`next build` with "Can't resolve './contracts/findings.js'" while typecheck passed, because type-only imports are erased before resolution. Fix: `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` in next.config.mjs (turbopack ignores the webpack hook but resolves natively). (next.config.mjs, src/vendor/shared/index.ts:17)
+- 2026-09-20 — RTL 16's `asyncWrapper` (wraps every userEvent/waitFor call) parks on a fake `setTimeout(resolve, 0)` and only advances it when it detects jest fake timers — `setTimeout.clock` exists (true for vitest's sinon clock) AND a global `jest.advanceTimersByTime` exists; vitest never defines `jest`, so under `vi.useFakeTimers()` every `userEvent.*` call hangs forever (even `delay: null`). Fix: setup.ts bridges `(globalThis as any).jest = { advanceTimersByTime: (ms) => vi.advanceTimersByTime(ms) }`; inert under real timers (no `clock` prop), and react-dom 19 references `jest` zero times so the shim changes nothing else. (src/test/setup.ts, FindingsCell.test.tsx)
+- 2026-09-20 — `title.template` in app/layout.tsx applies to CHILD route segments only — the root page shares the layout's segment, so its plain `title` renders bare ("Home"); the root page needs `title: { absolute: … }` while every nested page gets the "%s · DevDigest" template. (src/app/layout.tsx, src/app/page.tsx)
+- 2026-09-19 — A relative-import codemod must rewrite `vi.mock("../../../lib/…")` path strings in lockstep with the imports: vitest resolves both through the same alias map, so an aliased `vi.mock("@/lib/hooks/reviews")` intercepts an aliased import and the suite stays green — but a half-rewritten pair silently stops mocking. (src/app/**/*.test.tsx)
+- 2026-09-19 — next/font/google (Inter as `--font-inter`) downloads woff2 files at BUILD time — needs fonts.googleapis.com reachability or `next build` fails; consumption happens by re-declaring `body { font-family: var(--font-inter), … }` in globals.css AFTER the `@import` of the vendored styles.css (same specificity, later source order wins) rather than editing the vendored rule. (src/app/layout.tsx:12, src/app/globals.css:9)
 - 2026-09-18 — React 19 dev-mode warns "Updating a style property during rerender (borderColor) when a conflicting property is set (borderLeftColor)" when one element's inline style mixes a shorthand with a longhand it expands to — and `borderColor`/`borderWidth` are shorthands too, so a left-edge severity stripe must set all four `border<Side>Width`/`border<Side>Color` longhands (removing only the `border` super-shorthand, as an earlier fix here did, is not enough). (pulls/[number]/_components/FindingCard/styles.ts:5)
 
 ## Recurring Errors & Fixes

@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import GlobalError from "./global-error";
 
 afterEach(cleanup);
@@ -7,13 +8,14 @@ afterEach(cleanup);
 type GlobalErrorProps = { error: Error & { digest?: string }; reset: () => void };
 
 describe("GlobalError (app/global-error.tsx)", () => {
-  it("renders the self-contained fallback with Try-again wired to reset()", () => {
+  it("renders the self-contained fallback with Try-again wired to reset()", async () => {
+    const user = userEvent.setup();
     const reset = vi.fn();
     // Deliberately NO next-intl provider: global-error replaces the root
     // layout, so the fallback must not depend on any provider.
     render(<GlobalError error={new Error("layout boom")} reset={reset} />);
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(reset).toHaveBeenCalledOnce();
   });
 

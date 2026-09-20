@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import React from "react";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import messages from "../../messages/en/common.json";
 import RouteError from "./error";
@@ -37,7 +38,8 @@ class Boundary extends React.Component<
 }
 
 describe("RouteError (app/error.tsx)", () => {
-  it("shows the fallback when a child throws and re-renders it after reset", () => {
+  it("shows the fallback when a child throws and re-renders it after reset", async () => {
+    const user = userEvent.setup();
     let shouldThrow = true;
     function Flaky() {
       if (shouldThrow) throw new Error("boom");
@@ -56,15 +58,16 @@ describe("RouteError (app/error.tsx)", () => {
     expect(screen.queryByText("content ok")).not.toBeInTheDocument();
 
     shouldThrow = false;
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(screen.getByText("content ok")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("wires Try-again (Retry) to reset()", () => {
+  it("wires Try-again (Retry) to reset()", async () => {
+    const user = userEvent.setup();
     const reset = vi.fn();
     renderRouteError({ error: new Error("boom"), reset });
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(reset).toHaveBeenCalledOnce();
   });
 

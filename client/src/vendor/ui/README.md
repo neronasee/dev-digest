@@ -52,8 +52,8 @@ you just need the rendered chip.
 
 ## Showcase
 
-Every component is rendered (in both themes) by the **`/showcase`** route
-(`src/components/showcase/Showcase.tsx`). The smoke test
+Every component is rendered (in both themes) by the test-only gallery
+(`src/test/showcase/Showcase.tsx` — no route). The smoke test
 (`src/test/smoke.test.tsx`) mounts that gallery, so a broken export or render
 fails CI. When you add or change a component, add it to the showcase.
 

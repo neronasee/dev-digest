@@ -8,7 +8,7 @@ import { ReviewRunAccordion } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { countBySeverity, type SeverityCounts } from "../../../../../../../lib/severity";
+import { countBySeverity, type SeverityCounts } from "@/lib/severity";
 
 interface FindingsTabProps {
   prId: string | null;

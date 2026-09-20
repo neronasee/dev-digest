@@ -347,40 +347,56 @@ export class RepoIntelRepository {
   // T3 — graph / rank / repo-map / facts writes.
   // -------------------------------------------------------------------------
 
-  /** Replace the whole import-graph for a repo (full index / incremental). */
+  /**
+   * Replace the whole import-graph for a repo (full index / incremental).
+   * B3 — ONE transaction: a failed insert can't leave the graph half-wiped.
+   */
   async replaceEdges(repoId: string, edges: IndexerEdgeRow[]): Promise<void> {
-    await this.db.delete(t.fileEdges).where(eq(t.fileEdges.repoId, repoId));
-    if (edges.length === 0) return;
-    const rows = edges.map((e) => ({ repoId, fromFile: e.fromFile, toFile: e.toFile }));
-    for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
-      await this.db.insert(t.fileEdges).values(rows.slice(i, i + INSERT_CHUNK_SIZE));
-    }
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.fileEdges).where(eq(t.fileEdges.repoId, repoId));
+      if (edges.length === 0) return;
+      const rows = edges.map((e) => ({ repoId, fromFile: e.fromFile, toFile: e.toFile }));
+      for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
+        await tx.insert(t.fileEdges).values(rows.slice(i, i + INSERT_CHUNK_SIZE));
+      }
+    });
   }
 
-  /** Replace the whole file_rank table for a repo. */
+  /**
+   * Replace the whole file_rank table for a repo. B3 — ONE transaction: the
+   * delete + every chunk commit together (the rank table feeds the repo map,
+   * so a partial replace would silently skew the map).
+   */
   async replaceFileRank(repoId: string, rows: IndexerFileRankRow[]): Promise<void> {
-    await this.db.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
-    if (rows.length === 0) return;
-    const values = rows.map((r) => ({ repoId, ...r }));
-    for (let i = 0; i < values.length; i += INSERT_CHUNK_SIZE) {
-      await this.db.insert(t.fileRank).values(values.slice(i, i + INSERT_CHUNK_SIZE));
-    }
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.fileRank).where(eq(t.fileRank.repoId, repoId));
+      if (rows.length === 0) return;
+      const values = rows.map((r) => ({ repoId, ...r }));
+      for (let i = 0; i < values.length; i += INSERT_CHUNK_SIZE) {
+        await tx.insert(t.fileRank).values(values.slice(i, i + INSERT_CHUNK_SIZE));
+      }
+    });
   }
 
-  /** Replace per-file facts; only rows with at least one endpoint/cron persist. */
+  /**
+   * Replace per-file facts; only rows with at least one endpoint/cron persist.
+   * B3 — ONE transaction: facts and their delete commit together.
+   */
   async replaceFileFacts(repoId: string, rows: IndexerFileFactsRow[]): Promise<void> {
-    await this.db.delete(t.fileFacts).where(eq(t.fileFacts.repoId, repoId));
-    const nonEmpty = rows.filter((r) => r.endpoints.length > 0 || r.crons.length > 0);
-    if (nonEmpty.length === 0) return;
-    const values = nonEmpty.map((r) => ({
-      repoId,
-      filePath: r.filePath,
-      endpoints: r.endpoints,
-      crons: r.crons,
-    }));
-    for (let i = 0; i < values.length; i += INSERT_CHUNK_SIZE) {
-      await this.db.insert(t.fileFacts).values(values.slice(i, i + INSERT_CHUNK_SIZE));
-    }
+    await this.db.transaction(async (tx) => {
+      await tx.delete(t.fileFacts).where(eq(t.fileFacts.repoId, repoId));
+      const nonEmpty = rows.filter((r) => r.endpoints.length > 0 || r.crons.length > 0);
+      if (nonEmpty.length === 0) return;
+      const values = nonEmpty.map((r) => ({
+        repoId,
+        filePath: r.filePath,
+        endpoints: r.endpoints,
+        crons: r.crons,
+      }));
+      for (let i = 0; i < values.length; i += INSERT_CHUNK_SIZE) {
+        await tx.insert(t.fileFacts).values(values.slice(i, i + INSERT_CHUNK_SIZE));
+      }
+    });
   }
 
   /**

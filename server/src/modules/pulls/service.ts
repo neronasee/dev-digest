@@ -200,29 +200,27 @@ export class PullsService {
     try {
       const gh = await this.container.github();
       const detail = await gh.getPullRequest({ owner: repo.owner, name: repo.name }, pr.number);
-      await this.pulls.replaceFiles(
-        pr.id,
-        detail.files.map((f) => ({
+      // B3 — files + commits + body/diff-stats persist as ONE transaction, so a
+      // mid-refresh failure can't mix two refreshes' data on the same PR.
+      await this.pulls.replaceDetail(pr.id, {
+        files: detail.files.map((f) => ({
           path: f.path,
           additions: f.additions,
           deletions: f.deletions,
           patch: f.patch ?? null,
         })),
-      );
-      await this.pulls.replaceCommits(
-        pr.id,
-        detail.commits.map((c) => ({
+        commits: detail.commits.map((c) => ({
           sha: c.sha,
           message: c.message,
           author: c.author,
           committedAt: c.committed_at ? new Date(c.committed_at) : null,
         })),
-      );
-      await this.pulls.updateDetail(pr.id, {
-        body: detail.body ?? null,
-        additions: detail.additions,
-        deletions: detail.deletions,
-        filesCount: detail.files_count,
+        detail: {
+          body: detail.body ?? null,
+          additions: detail.additions,
+          deletions: detail.deletions,
+          filesCount: detail.files_count,
+        },
       });
       return { ...detail, id: pr.id };
     } catch (err) {

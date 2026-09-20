@@ -7,7 +7,8 @@ import * as t from '../../db/schema.js';
  * table. Every query is scoped by `workspaceId` (tenancy guard).
  */
 
-export type RepoRow = typeof t.repos.$inferSelect;
+import type { RepoRow } from '../../db/rows.js';
+export type { RepoRow };
 
 export interface InsertRepo {
   workspaceId: string;

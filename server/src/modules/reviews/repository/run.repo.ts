@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { Db } from '../../../db/client.js';
+import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
 
@@ -98,20 +98,26 @@ export async function listRunsForPull(
  * (and its findings, which DO cascade from `reviews`) must be removed explicitly
  * here — otherwise deleting a run from the timeline leaves its findings orphaned
  * in the Review Runs list below.
+ *
+ * B3 — ONE transaction: the review delete and the run delete succeed or fail
+ * together, so a mid-unit failure can never leave the run deleted while its
+ * review (and findings) survive — or the inverse.
  */
 export async function deleteAgentRun(
-  db: Db,
+  db: DbOrTx,
   workspaceId: string,
   runId: string,
 ): Promise<boolean> {
-  await db
-    .delete(t.reviews)
-    .where(and(eq(t.reviews.runId, runId), eq(t.reviews.workspaceId, workspaceId)));
-  const rows = await db
-    .delete(t.agentRuns)
-    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.workspaceId, workspaceId)))
-    .returning({ id: t.agentRuns.id });
-  return rows.length > 0;
+  return db.transaction(async (tx) => {
+    await tx
+      .delete(t.reviews)
+      .where(and(eq(t.reviews.runId, runId), eq(t.reviews.workspaceId, workspaceId)));
+    const rows = await tx
+      .delete(t.agentRuns)
+      .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.workspaceId, workspaceId)))
+      .returning({ id: t.agentRuns.id });
+    return rows.length > 0;
+  });
 }
 
 /** Mark a still-running run as cancelled (no-op if it already finished). */

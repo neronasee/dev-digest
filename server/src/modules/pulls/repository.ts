@@ -1,11 +1,10 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { PrMeta } from '@devdigest/shared';
-import type { Db } from '../../db/client.js';
+import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { PullRow } from '../../db/rows.js';
+import type { PrCommitRow, PrFileRow, PullRow, RepoRow } from '../../db/rows.js';
 
-export type { PullRow };
-export type RepoRow = typeof t.repos.$inferSelect;
+export type { PullRow, RepoRow };
 
 /**
  * F1 — pulls data-access layer (B1). The ONLY file in the pulls module that
@@ -101,7 +100,60 @@ export class PullsRepository {
     prId: string,
     stats: { additions: number; deletions: number; filesCount: number },
   ): Promise<void> {
-    await this.db
+    await this.updateDiffStatsIn(this.db, prId, stats);
+  }
+
+  /** Persist the body + diff stats of a GitHub detail refresh. */
+  async updateDetail(
+    prId: string,
+    detail: { additions: number; deletions: number; filesCount: number; body: string | null },
+  ): Promise<void> {
+    await this.updateDetailIn(this.db, prId, detail);
+  }
+
+  /** Replace a PR's file rows (delete + insert; B3 wraps this in a tx). */
+  async replaceFiles(
+    prId: string,
+    files: { path: string; additions: number; deletions: number; patch: string | null }[],
+  ): Promise<void> {
+    await this.replaceFilesIn(this.db, prId, files);
+  }
+
+  /** Replace a PR's commit rows (delete + insert; B3 wraps this in a tx). */
+  async replaceCommits(
+    prId: string,
+    commits: { sha: string; message: string; author: string; committedAt: Date | null }[],
+  ): Promise<void> {
+    await this.replaceCommitsIn(this.db, prId, commits);
+  }
+
+  /**
+   * B3 — ONE transaction for the whole per-PR detail sync write: files replace
+   * + commits replace + body/diff-stats update. The old three-step sequence
+   * could die mid-way and leave (e.g.) files replaced while commits and the
+   * PR row still held the previous refresh's data.
+   */
+  async replaceDetail(
+    prId: string,
+    payload: {
+      files: { path: string; additions: number; deletions: number; patch: string | null }[];
+      commits: { sha: string; message: string; author: string; committedAt: Date | null }[];
+      detail: { additions: number; deletions: number; filesCount: number; body: string | null };
+    },
+  ): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await this.replaceFilesIn(tx, prId, payload.files);
+      await this.replaceCommitsIn(tx, prId, payload.commits);
+      await this.updateDetailIn(tx, prId, payload.detail);
+    });
+  }
+
+  private async updateDiffStatsIn(
+    client: DbOrTx,
+    prId: string,
+    stats: { additions: number; deletions: number; filesCount: number },
+  ): Promise<void> {
+    await client
       .update(t.pullRequests)
       .set({
         additions: stats.additions,
@@ -111,12 +163,12 @@ export class PullsRepository {
       .where(eq(t.pullRequests.id, prId));
   }
 
-  /** Persist the body + diff stats of a GitHub detail refresh. */
-  async updateDetail(
+  private async updateDetailIn(
+    client: DbOrTx,
     prId: string,
     detail: { additions: number; deletions: number; filesCount: number; body: string | null },
   ): Promise<void> {
-    await this.db
+    await client
       .update(t.pullRequests)
       .set({
         body: detail.body,
@@ -129,14 +181,14 @@ export class PullsRepository {
       .where(eq(t.pullRequests.id, prId));
   }
 
-  /** Replace a PR's file rows (delete + insert; B3 wraps this in a tx). */
-  async replaceFiles(
+  private async replaceFilesIn(
+    client: DbOrTx,
     prId: string,
     files: { path: string; additions: number; deletions: number; patch: string | null }[],
   ): Promise<void> {
-    await this.db.delete(t.prFiles).where(eq(t.prFiles.prId, prId));
+    await client.delete(t.prFiles).where(eq(t.prFiles.prId, prId));
     if (files.length === 0) return;
-    await this.db.insert(t.prFiles).values(
+    await client.insert(t.prFiles).values(
       files.map((f) => ({
         prId,
         path: f.path,
@@ -147,14 +199,14 @@ export class PullsRepository {
     );
   }
 
-  /** Replace a PR's commit rows (delete + insert; B3 wraps this in a tx). */
-  async replaceCommits(
+  private async replaceCommitsIn(
+    client: DbOrTx,
     prId: string,
     commits: { sha: string; message: string; author: string; committedAt: Date | null }[],
   ): Promise<void> {
-    await this.db.delete(t.prCommits).where(eq(t.prCommits.prId, prId));
+    await client.delete(t.prCommits).where(eq(t.prCommits.prId, prId));
     if (commits.length === 0) return;
-    await this.db.insert(t.prCommits).values(
+    await client.insert(t.prCommits).values(
       commits.map((c) => ({
         prId,
         sha: c.sha,
@@ -165,11 +217,11 @@ export class PullsRepository {
     );
   }
 
-  async listFiles(prId: string): Promise<(typeof t.prFiles.$inferSelect)[]> {
+  async listFiles(prId: string): Promise<PrFileRow[]> {
     return this.db.select().from(t.prFiles).where(eq(t.prFiles.prId, prId));
   }
 
-  async listCommits(prId: string): Promise<(typeof t.prCommits.$inferSelect)[]> {
+  async listCommits(prId: string): Promise<PrCommitRow[]> {
     return this.db.select().from(t.prCommits).where(eq(t.prCommits.prId, prId));
   }
 

@@ -13,10 +13,8 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
  * composes them so its public API stays identical.
  */
 
-import type { FindingRow, PullRow } from '../../db/rows.js';
-export type { FindingRow, PullRow };
-
-export type ReviewRow = typeof t.reviews.$inferSelect;
+import type { FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow } from '../../db/rows.js';
+export type { FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow };
 
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';
@@ -31,11 +29,11 @@ export class ReviewRepository {
     return pullRepo.getPull(this.db, workspaceId, prId);
   }
 
-  getRepo(repoId: string): Promise<typeof t.repos.$inferSelect | undefined> {
+  getRepo(repoId: string): Promise<RepoRow | undefined> {
     return pullRepo.getRepo(this.db, repoId);
   }
 
-  getPrFiles(prId: string): Promise<(typeof t.prFiles.$inferSelect)[]> {
+  getPrFiles(prId: string): Promise<PrFileRow[]> {
     return pullRepo.getPrFiles(this.db, prId);
   }
 
@@ -57,6 +55,35 @@ export class ReviewRepository {
 
   insertFindings(reviewId: string, findings: Finding[]): Promise<FindingRow[]> {
     return reviewRepo.insertFindings(this.db, reviewId, findings);
+  }
+
+  /**
+   * B3 — persist a review, its findings, and mark the PR reviewed as ONE
+   * transaction. The run executor previously issued these as three independent
+   * statements: a mid-unit failure could leave a review with no findings, or
+   * findings whose review never made it, and a PR never marked reviewed.
+   */
+  persistReviewWithFindings(
+    values: {
+      workspaceId: string;
+      prId: string;
+      agentId: string | null;
+      runId: string | null;
+      kind: 'summary' | 'review';
+      verdict: string | null;
+      summary: string | null;
+      score: number | null;
+      model: string | null;
+    },
+    findings: Finding[],
+    markReviewed: { prId: string; sha: string },
+  ): Promise<{ review: ReviewRow; findings: FindingRow[] }> {
+    return this.db.transaction(async (tx) => {
+      const review = await reviewRepo.insertReview(tx, values);
+      const rows = await reviewRepo.insertFindings(tx, review.id, findings);
+      await pullRepo.markReviewed(tx, markReviewed.prId, markReviewed.sha);
+      return { review, findings: rows };
+    });
   }
 
   /** Reviews for a PR (newest first), each with its findings. */

@@ -13,5 +13,8 @@ only routes you to the right one.
   map into reviews → [`../server/src/modules/repo-intel`](../server/src/modules/repo-intel)
 - **Reviewer agent system prompts** → [`agent-prompts/`](agent-prompts/README.md)
 - **Testing strategy** (suites, CI workflows, Docker needs) → [`../TESTING.md`](../TESTING.md)
+- **Improvement backlog** — dated plan from the 2026-09-19 skill-based audit
+  (waves, tracks, per-item verification) →
+  [`improvement-plan-2026-09-19.md`](improvement-plan-2026-09-19.md)
 
 Deeper module-level notes live in each module's `docs/` folder.

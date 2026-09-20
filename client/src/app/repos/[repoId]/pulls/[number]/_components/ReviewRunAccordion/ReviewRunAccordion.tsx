@@ -29,14 +29,25 @@ export function ReviewRunAccordion({
   defaultOpen = false,
   repoFullName,
   headSha,
+  targetRunId = null,
+  targetRequest = 0,
 }: {
   review: ReviewRecord;
   prId: string;
   defaultOpen?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** A timeline navigation request opens this run before scrolling to it. */
+  targetRunId?: string | null;
+  targetRequest?: number;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!review.run_id || review.run_id !== targetRunId) return;
+    setOpen(true);
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [review.run_id, targetRunId, targetRequest]);
   const del = useDeleteReview(prId);
   const findings = review.findings;
   const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
@@ -44,8 +55,7 @@ export function ReviewRunAccordion({
 
   return (
     <div
-      // Scroll anchor for the Timeline above: clicking a run's agent name in
-      // RunHistory scrolls to this id (see FindingsTab's goToReview).
+      ref={rootRef}
       id={review.run_id ? `review-run-${review.run_id}` : undefined}
       style={{
         border: "1px solid var(--border)",

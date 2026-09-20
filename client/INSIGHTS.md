@@ -34,7 +34,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-18 — React 19 dev-mode warns "Updating a style property during rerender (borderColor) when a conflicting property is set (borderLeftColor)" when one element's inline style mixes a shorthand with a longhand it expands to — and `borderColor`/`borderWidth` are shorthands too, so a left-edge severity stripe must set all four `border<Side>Width`/`border<Side>Color` longhands (removing only the `border` super-shorthand, as an earlier fix here did, is not enough). (pulls/[number]/_components/FindingCard/styles.ts:5)
 
 ## Recurring Errors & Fixes
 

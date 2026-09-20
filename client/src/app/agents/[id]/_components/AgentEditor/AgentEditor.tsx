@@ -20,7 +20,9 @@ export function AgentEditor({ agent, tab, onTab }: { agent: Agent; tab: string; 
         <Tabs tabs={tabs} value={tab} onChange={onTab} pad="0 24px" />
       </div>
       <div style={s.body}>
-        <ConfigTab agent={agent} />
+        {/* key remounts the form when switching agents, so the props-derived
+            local state re-initializes instead of being reset by an effect. */}
+        <ConfigTab key={agent.id} agent={agent} />
       </div>
     </div>
   );

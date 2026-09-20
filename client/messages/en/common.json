@@ -11,11 +11,18 @@
   "states": {
     "loading": "Loading…",
     "empty": "Nothing here yet",
-    "error": "Something went wrong"
+    "error": "Something went wrong",
+    "errorBody": "This page failed to render. Try again — if it keeps failing, check the app's terminal output.",
+    "errorDigest": "Error reference: {digest}"
   },
   "repoNotFound": {
     "title": "No repo selected",
     "body": "This repository isn't in your workspace — it may have been removed, or the link is stale. Add a repo or pick another from the switcher to get started.",
     "cta": "Add repository"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This page doesn't exist — it may have been moved, or the link is stale.",
+    "cta": "Go to dashboard"
   }
 }

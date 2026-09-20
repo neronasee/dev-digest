@@ -3,7 +3,7 @@
 import React, { useCallback } from "react";
 import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
-import { RunHistory } from "../RunHistory/RunHistory";
+import { RunHistory } from "../RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
@@ -50,27 +50,13 @@ export function FindingsTab({
     if (liveRunIds[0]) onOpenTrace(liveRunIds[0]);
   }, [liveRunIds, onOpenTrace]);
 
-  const handleOpenTrace = useCallback(
-    (id: string) => {
-      onOpenTrace(id);
-    },
-    [onOpenTrace],
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      onDelete(id);
-    },
-    [onDelete],
-  );
-
   // Timeline → Review-runs navigation: clicking an agent name in the timeline
-  // opens + scrolls to that run's accordion below. The nonce re-triggers the
-  // scroll even when the same run is clicked twice.
-  const [target, setTarget] = React.useState<{ runId: string; n: number } | null>(null);
-  const handleGoToReview = useCallback((runId: string) => {
-    setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
-  }, []);
+  // scrolls to that run's accordion below — each accordion renders
+  // id="review-run-<runId>", so a direct getElementById scroll needs no state
+  // hand-off between the two sections (and re-clicking the same run works).
+  const goToReview = (runId: string) => {
+    document.getElementById(`review-run-${runId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Per-run severity tallies for the timeline tiles, grouped client-side from
   // the reviews already fetched for the Review-runs section (run summaries
@@ -144,9 +130,9 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
-            onOpenTrace={handleOpenTrace}
-            onGoToReview={handleGoToReview}
-            onDelete={handleDelete}
+            onOpenTrace={onOpenTrace}
+            onGoToReview={goToReview}
+            onDelete={onDelete}
             severityByRun={severityByRun}
           />
         </div>
@@ -176,8 +162,6 @@ export function FindingsTab({
             defaultOpen={i === 0}
             repoFullName={repoFullName}
             headSha={headSha}
-            targetRunId={target?.runId ?? null}
-            targetNonce={target?.n ?? 0}
           />
         ))
       )}

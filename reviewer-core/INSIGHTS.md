@@ -26,7 +26,8 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-20 — The `UnifiedDiff` zod gate lives ONLY at `reviewPullRequest` entry (src/review/run.ts); `groundFindings`/`sliceDiff` stay defensive (optional-chain guards) because they are exported and callable directly, bypassing the gate. The vendored schemas (vendor/shared/adapters.ts) must stay at least as permissive as the server's `parseUnifiedDiff`: deleted-file hunks emit `@@ -1,N +0,0 @@` → `newStart`/`newLines` **0** and an EMPTY `newLineNumbers` — tightening to ≥1 or non-empty would fail live runs; a run.test.ts fixture pins this.
+- 2026-09-20 — `DiffHunk` carries ranges and line numbers, NOT text — any hunk-based reconstruction (e.g. the sliceDiff fallback) can only emit `+ [line N]` placeholders; the raw diff slice is the sole source of line text, so the fallback can never be "improved" into real content without changing the vendored contract. (src/review/reduce.ts)
 
 ## Tool & Library Notes
 

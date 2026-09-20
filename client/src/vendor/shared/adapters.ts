@@ -172,20 +172,41 @@ export interface CloneOptions {
   branch?: string;
 }
 
-export interface DiffHunk {
-  file: string;
-  oldStart: number;
-  oldLines: number;
-  newStart: number;
-  newLines: number;
+/**
+ * DiffHunk — runtime-validated (zod) so a malformed hunk fails LOUDLY at the
+ * review-run entry (`reviewPullRequest` safeParses once) instead of silently
+ * degrading citation grounding. The server's `parseUnifiedDiff` is the
+ * reference producer; the schema must stay at least as permissive as every
+ * shape it can emit: 0-valued starts/line-counts are REAL (a deleted file's
+ * hunk header is `@@ -1,N +0,0 @@` → newStart/newLines 0; a new file's is
+ * `@@ -0,0 +1,N @@`), and `newLineNumbers` is always an array but may be
+ * EMPTY (pure-deletion hunks — grounding falls back to the declared range).
+ */
+export const DiffHunk = z.object({
+  file: z.string(),
+  oldStart: z.number().int().nonnegative(),
+  oldLines: z.number().int().nonnegative(),
+  newStart: z.number().int().nonnegative(),
+  newLines: z.number().int().nonnegative(),
   /** Lines present in the *new* file covered by this hunk (for grounding). */
-  newLineNumbers: number[];
-}
+  newLineNumbers: z.array(z.number().int().nonnegative()),
+});
+export type DiffHunk = z.infer<typeof DiffHunk>;
 
-export interface UnifiedDiff {
-  raw: string;
-  files: { path: string; additions: number; deletions: number; hunks: DiffHunk[] }[];
-}
+/** One changed file in a UnifiedDiff: path + totals + its parsed hunks. */
+export const DiffFile = z.object({
+  path: z.string(),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  hunks: z.array(DiffHunk),
+});
+export type DiffFile = z.infer<typeof DiffFile>;
+
+export const UnifiedDiff = z.object({
+  raw: z.string(),
+  files: z.array(DiffFile),
+});
+export type UnifiedDiff = z.infer<typeof UnifiedDiff>;
 
 export interface BlameLine {
   line: number;

@@ -31,6 +31,10 @@ A spec lives in `specs/NN-name.flow.json`:
   command's stdout.
 - Locators are deterministic only (`--url`, `--text`, `find role|text|label`).
   We never use the AI `chat` command, so runs are stable and key-free.
+- Every spec is validated at load time against `FlowSchema`
+  (`lib/assert.ts`), which models this grammar: a typo'd key, unknown
+  command, condition-less `wait`, or stray `{…}` placeholder fails immediately
+  with the spec's filename — before any browser command runs.
 
 Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
 #482, the seeded agents), so nothing triggers a model call.
@@ -49,8 +53,11 @@ Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
 ## Run locally
 
 ```sh
-# 1. install the agent-browser CLI once (downloads Chrome for Testing)
-npm i -g agent-browser && agent-browser install
+# 1. install the agent-browser CLI once (downloads Chrome for Testing).
+#    Pinned to 0.27.x: locator behavior is version-sensitive (0.27's
+#    `wait --text` matches CSS-uppercased text — see INSIGHTS.md), so a
+#    0.28 behavior change could flake every locator.
+npm i -g agent-browser@0.27 && agent-browser install
 ```
 
 ### Hermetic (recommended)
@@ -101,3 +108,4 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-pr-list-findings` | PR list → FINDINGS column pills → hover popover «N FINDINGS IN THIS RUN» (read-only previews) |
+| `09-agent-editor` | `/agents` → click the seeded agent card → editor route's Config tab renders (read-only, no save) |

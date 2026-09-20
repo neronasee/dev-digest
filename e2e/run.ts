@@ -15,6 +15,9 @@
  *
  * Specs target read-only seeded data, so nothing here triggers an LLM call or
  * needs an API key. Run order is the lexical order of the spec filenames.
+ * Every spec is validated against FlowSchema (lib/assert.ts) at load time, so
+ * a malformed spec fails immediately with its filename — before any browser
+ * command runs.
  */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -22,6 +25,8 @@ import { readdirSync, readFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
+  FlowSchema,
+  formatFlowError,
   resolveArgs,
   stdoutContains,
   summarize,
@@ -54,10 +59,19 @@ function loadFlows(): { file: string; flow: Flow }[] {
   return readdirSync(SPECS_DIR)
     .filter((f) => f.endsWith(".flow.json"))
     .sort()
-    .map((file) => ({
-      file,
-      flow: JSON.parse(readFileSync(join(SPECS_DIR, file), "utf8")) as Flow,
-    }));
+    .map((file) => {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(readFileSync(join(SPECS_DIR, file), "utf8"));
+      } catch (e) {
+        throw new Error(`Invalid JSON in flow spec ${file}: ${(e as Error).message.split("\n")[0]}`);
+      }
+      const parsed = FlowSchema.safeParse(raw);
+      if (!parsed.success) {
+        throw new Error(`Invalid flow spec ${file}: ${formatFlowError(parsed.error)}`);
+      }
+      return { file, flow: parsed.data };
+    });
 }
 
 async function runFlow(file: string, flow: Flow): Promise<FlowResult> {

@@ -10,7 +10,11 @@ services:
       POSTGRES_PASSWORD: devdigest
       POSTGRES_DB: devdigest
     ports:
-      - "5432:5432"
+      # Loopback only: a bare "5432:5432" binds every interface, putting a
+      # dev DB with well-known creds on the LAN. Node's Happy Eyeballs still
+      # resolves `localhost` (::1 first) down to 127.0.0.1, so the API's
+      # DATABASE_URL keeps working unchanged.
+      - "127.0.0.1:5432:5432"
     volumes:
       - devdigest_pgdata:/var/lib/postgresql/data
     healthcheck:

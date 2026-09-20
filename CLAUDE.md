@@ -81,6 +81,10 @@ sync when contracts change.
   capture new non-obvious insights into the touched modules' `INSIGHTS.md`.
 - Review findings are grounded mechanically and the score is recomputed from
   surviving findings — the model's self-reported score is never trusted.
+- Before opening any PR — run the
+  [pr-self-review](.claude/skills/pr-self-review/SKILL.md) skill over the local
+  changes vs `origin/main`. A BLOCK verdict (≥1 CRITICAL finding) means fix
+  first: do not open, push, or merge until a re-run passes.
 
 ## Read when …
 

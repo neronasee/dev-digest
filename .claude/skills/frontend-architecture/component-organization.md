@@ -123,8 +123,9 @@ anyway.
 
 ## Boundaries & dependency rules
 
-- Dependency direction is one-way: `src/lib` + `src/components` (shared) →
-  `app/<route>/` (routes) → pages. Shared code never imports from `app/`.
+- Dependency direction is one-way: pages → route-local code under
+  `app/<route>/` → shared `src/components` + `src/lib`. Shared code never
+  imports from `app/`.
 - Routes never import another route's `_components/` — promote the code to
   shared, or let the second route carry its own copy until the shared shape
   is clear.
@@ -132,5 +133,5 @@ anyway.
   not deep paths (`…/AgentCard/AgentCard` is a violation). Keep barrels
   minimal — the public surface only.
 - Enforce mechanically with `eslint-plugin-import`
-  (`import/no-restricted-paths` zones: shared → routes allowed; route → route
-  forbidden).
+  (`import/no-restricted-paths` zones: shared → routes forbidden; one route →
+  another route forbidden).

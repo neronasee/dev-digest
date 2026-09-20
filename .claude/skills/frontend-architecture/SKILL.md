@@ -59,9 +59,10 @@ Answer in order:
    shared level: `src/components/<kebab-dir>/` (UI), `src/lib/<name>.ts`
    (logic), `src/lib/hooks/<domain>.ts` (data/query hooks — UI-state hooks
    stay colocated; see [component-organization.md](component-organization.md)).
-3. **Next.js-routable?** Only `page`/`route`/`layout` files are routes;
-   anything else under `app/` is colocatable. Use `_folder` (e.g.
-   `_components/`, `_lib/`) to keep non-route code clearly private.
+3. **Next.js-routable?** `page` and `route` create URL endpoints; `layout`,
+   `template`, `loading`, `error`, `not-found`, and `default` are also reserved
+   segment conventions. Other files under `app/` are colocatable. Use
+   `_folder` (e.g. `_components/`, `_lib/`) to keep ordinary code clearly private.
 4. **Classify the code kind** (UI / stateful logic / pure rule / I/O) before
    choosing a folder — the kind decides the layer, the consumers decide the
    level.

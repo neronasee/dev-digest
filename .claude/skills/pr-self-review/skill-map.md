@@ -41,7 +41,8 @@ classification is additive per file.
 | `reviewer-core/src/**` (all other) | onion-architecture (`core-is-pure`) | core: npm test + typecheck; server `depcruise:all` |
 | `reviewer-core/{tsconfig,package}.json` | typescript-expert | core: typecheck (+ invariant C2) |
 | `e2e/specs/*.flow.json` | none (naming invariant C6 only) | e2e: typecheck; flow-name regex |
-| `e2e/{lib,run.ts,agent-browser.json}/**` | none | e2e: typecheck (npm test only if hermetic stack is up) |
+| `e2e/lib/**` | none | e2e: typecheck (npm test only if hermetic stack is up) |
+| `e2e/run.ts`, `e2e/agent-browser.json` | none | e2e: typecheck (npm test only if hermetic stack is up) |
 | `**/tsconfig.json`, `**/*.d.ts` | typescript-expert | owning package: typecheck |
 | `docs/**`, `*/README.md`, `*/docs/**`, `*/specs/**/*.md`, `TESTING.md`, `designs/**` | none | convention sanity only (SUGGESTION-level) |
 | `CLAUDE.md`, `*/CLAUDE.md`, `.claude/skills/**` | none | CLAUDE.md link-not-duplicate rule (SUGGESTION-level) |
@@ -77,9 +78,9 @@ a warning that names a changed file → one WARNING.
 | # | Rule | Check | Severity / category |
 |---|---|---|---|
 | C1 | Applied migrations are append-only history | `git diff --name-status origin/main -- server/src/db/migrations/`: M or D on a `.sql` file that exists in the base → violation. M on `meta/_journal.json` **with no A-status `.sql`** in the same diff → violation (history rewrite). A new `.sql` + M on `_journal.json` is the normal `pnpm db:generate` append — allowed, review its content with drizzle-orm-patterns | CRITICAL / bug |
-| C2 | Lockfiles change only through the package manager | lockfile modified while sibling `package.json` is NOT in the diff → violation (4 lockfiles: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`, `reviewer-core/package-lock.json`, `e2e/package-lock.json`). Reverse direction — `package.json` modified with a `dependencies`/`devDependencies`/`peerDependencies` change but lockfile NOT in diff → warning (run the package manager) | CRITICAL / bug (WARNING for the reverse direction) |
+| C2 | Lockfiles change only through the package manager | lockfile modified without a sibling `package.json` change to `dependencies`, `devDependencies`, or `peerDependencies` → violation (4 lockfiles: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`, `reviewer-core/package-lock.json`, `e2e/package-lock.json`; unrelated script/metadata edits do not justify lockfile churn). Reverse direction — one of those dependency fields changed but the lockfile is NOT in the diff → warning (run the package manager) | CRITICAL / bug (WARNING for the reverse direction) |
 | C3 | Vendored contracts stay byte-identical server↔client | Table B vendor-sync check when either vendor dir is touched | CRITICAL / bug |
-| C4 | No secrets in the diff | scan ADDED lines for token patterns — `sk-`, `ghp_`, `gho_`, `AKIA`, `xox[bp]-`, `BEGIN PRIVATE KEY`, literal passwords in config — outside `server/src/adapters/secrets/` | CRITICAL / security |
+| C4 | No secrets in the diff | scan ADDED lines for credential-shaped values (a prefix plus a plausible non-placeholder payload), not bare token names in documentation. Check OpenAI, GitHub, AWS, Slack, private-key, and literal-password patterns outside `server/src/adapters/secrets/`; exclude this rule's own pattern-description row from matches | CRITICAL / security |
 | C5 | INJECTION_GUARD intact | diff touches the guard text in `server/src/prompts/**` | CRITICAL / security |
 | C6 | Naming conventions | PascalCase component files matching the default export, kebab-case non-component modules, DB-backed server tests end `*.it.test.ts`, e2e flows match `specs/NN-name.flow.json` | WARNING / style (SUGGESTION for docs paths) |
 | C7 | Mechanical checks pass | Table B results | CRITICAL / bug (or `test`) |

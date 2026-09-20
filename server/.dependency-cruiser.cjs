@@ -29,7 +29,12 @@ module.exports = {
 
     // reviewer-core is the domain core: pure pipeline functions whose only
     // contact with the outside world is the injected LLMProvider. No HTTP,
-    // no DB, no SDKs, no filesystem.
+    // no DB, no SDKs, no filesystem, no child processes.
+    //
+    // Pattern note: dependency-cruiser renders resolved npm deps as
+    // `…/node_modules/<pkg>/…` (hence the `node_modules/<pkg>/` forms) and
+    // node builtins WITHOUT the `node:` prefix (hence `(node:)?fs(/|$)`).
+    //
     {
       name: 'core-is-pure',
       comment: 'reviewer-core must stay pure — no I/O beyond the injected LLMProvider',
@@ -37,17 +42,32 @@ module.exports = {
       from: { path: 'reviewer-core/src' },
       to: {
         path: [
-          '^fastify',
+          'node_modules/fastify/',
           'drizzle-orm',
-          '^postgres',
-          '^octokit',
+          'node_modules/postgres/',
+          'node_modules/@octokit/',
+          'node_modules/octokit/',
           'simple-git',
           '@ast-grep/napi',
           '/src/adapters/',
           '/src/db/',
-          '^node:fs',
+          '^(node:)?fs(/|$)',
+          '^(node:)?(child_process|net|http|os|process)(/|$)',
         ],
       },
+    },
+
+    // Only these two ledgered files may use `openai`. Keeping this exception
+    // in its own edge rule means they remain subject to every other purity ban.
+    {
+      name: 'core-openai-egress-only',
+      comment: 'only the designated reviewer-core egress files may import openai',
+      severity: 'error',
+      from: {
+        path: 'reviewer-core/src',
+        pathNot: ['reviewer-core/src/llm/openrouter\\.ts$', 'reviewer-core/src/llm/structured\\.ts$'],
+      },
+      to: { path: '^openai(/|$)|node_modules/openai/' },
     },
 
     // Services orchestrate through container ports (container.github(),
@@ -120,7 +140,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: ['node_modules', '/dist/', '\\.test\\.ts$', '\\.it\\.test\\.ts$'] },
+    exclude: { path: ['/dist/', '\\.test\\.ts$', '\\.it\\.test\\.ts$'] },
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
   },

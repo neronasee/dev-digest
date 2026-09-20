@@ -9,12 +9,15 @@ Pure pipeline functions: `diff → assemblePrompt → completeStructured →
 groundFindings → score` (`prompt.ts`, `grounding.ts`, `llm/structured.ts`,
 `review/run.ts`, `review/reduce.ts`, `output/to-review.ts`).
 
-- Iron rule: **no I/O** — the only contact with the outside world is the
-  injected `LLMProvider`.
+- Iron rule: **no I/O** — the intended boundary is an injected `LLMProvider`.
+  Two ledgered SDK exceptions remain: `llm/openrouter.ts` implements that
+  provider for both consumers, and `llm/structured.ts` uses the OpenAI SDK's
+  pure Zod-to-JSON-Schema helper. Both exceptions are limited to `openai`
+  imports and remain subject to every other purity ban; see `enforcement.md`.
 - Must not import: fastify, drizzle-orm, postgres, octokit, simple-git,
   `@ast-grep/napi`, `node:fs`, or any server `adapters/` / `db/` code.
 - May import: `@devdigest/shared`, zod, node builtins (non-fs), itself.
-- Enforced by the `core-is-pure` rule (error severity).
+- Enforced by `core-is-pure` plus `core-openai-egress-only` (error severity).
 
 ## Layer 2 — Ports / contracts (`@devdigest/shared`, vendored at `server/src/vendor/shared/`)
 

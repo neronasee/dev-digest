@@ -7,10 +7,12 @@ this file covers placement only.
 
 ## Colocation is safe by default
 
-A folder under `app/` becomes public **only** when it contains `page.tsx` or
-`route.ts`; only the content those files return is sent as a route. Anything
-else — components, hooks, helpers, styles — can live beside the route and
-stays private:
+A folder under `app/` becomes a URL route **only** when it contains `page.tsx`
+or `route.ts`; only the content those files return is sent as that route.
+Next.js also reserves segment-level names such as `layout`, `template`,
+`loading`, `error`, `not-found`, and `default`, so ordinary colocated files
+must not reuse those conventions. Components, hooks, helpers, and styles with
+non-reserved names can live beside the route and stay private:
 
 ```
 app/repos/[repoId]/pulls/[number]/

@@ -17,8 +17,14 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+// `default` keeps the plain "DevDigest" title on routes that export no
+// metadata; `template` lets thin server pages contribute just their piece
+// ("Pull Requests" → "Pull Requests · DevDigest") — the F15 shape.
 export const metadata: Metadata = {
-  title: "DevDigest",
+  title: {
+    default: "DevDigest",
+    template: "%s · DevDigest",
+  },
   description: "Local-first AI PR review tool",
 };
 

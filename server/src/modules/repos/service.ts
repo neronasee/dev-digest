@@ -8,10 +8,7 @@ import {
   CLONE_DEPTH,
   GITHUB_TOKEN_SECRET,
 } from './constants.js';
-import {
-  INDEX_JOB_KIND,
-  REFRESH_JOB_KIND,
-} from '../repo-intel/constants.js';
+import { INDEX_JOB_KIND, REFRESH_JOB_KIND } from '../_shared/job-kinds.js';
 
 /**
  * F1 — repos service. Business logic for the Repositories feature:

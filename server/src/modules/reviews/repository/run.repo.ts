@@ -1,9 +1,33 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
 
 // ---- in-flight / history --------------------------------------------------
+
+/** Run rows for the PR-LIST rollup (B2 read surface): the status='done' runs
+ *  of a PR set, NEWEST-FIRST (ran_at desc). "Successful-only" is enforced in
+ *  the query itself, so a newer failed/cancelled round can never mask an
+ *  older successful round's cost/findings; the consumer (pulls module) only
+ *  sums/picks rounds from these rows. */
+export async function doneRunsForPrs(
+  db: Db,
+  prIds: string[],
+): Promise<{ id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; status: string }[]> {
+  if (prIds.length === 0) return [];
+  return db
+    .select({
+      id: t.agentRuns.id,
+      prId: t.agentRuns.prId,
+      multiRunId: t.agentRuns.multiRunId,
+      costUsd: t.agentRuns.costUsd,
+      status: t.agentRuns.status,
+    })
+    .from(t.agentRuns)
+    .where(and(inArray(t.agentRuns.prId, prIds), eq(t.agentRuns.status, 'done')))
+    .orderBy(desc(t.agentRuns.ranAt));
+}
+
 
 /** In-flight runs for a PR (status='running') — the server-side source of
  *  truth for "which agents are running now". Joined with the agent name. */

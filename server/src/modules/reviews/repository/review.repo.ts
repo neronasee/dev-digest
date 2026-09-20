@@ -8,6 +8,71 @@ export type ReviewRow = typeof t.reviews.$inferSelect;
 
 // ---- reviews + findings ---------------------------------------------------
 
+/** PR-LIST rollup read surface (B2): newest-first (created_at desc) review
+ *  SCORE rows for a PR set, kind='review' only. The consumer resolves "the
+ *  latest review per PR" by taking the first row it sees per PR. */
+export async function latestReviewScores(
+  db: Db,
+  prIds: string[],
+): Promise<{ prId: string; score: number | null }[]> {
+  if (prIds.length === 0) return [];
+  return db
+    .select({ prId: t.reviews.prId, score: t.reviews.score })
+    .from(t.reviews)
+    .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
+    .orderBy(desc(t.reviews.createdAt));
+}
+
+/** Reviews produced by the given runs (id + runId) — the join step between a
+ *  round's runs and those reviews' findings (PR-list rollup). */
+export async function reviewIdsByRunIds(
+  db: Db,
+  runIds: string[],
+): Promise<{ id: string; runId: string | null }[]> {
+  if (runIds.length === 0) return [];
+  return db
+    .select({ id: t.reviews.id, runId: t.reviews.runId })
+    .from(t.reviews)
+    .where(inArray(t.reviews.runId, runIds));
+}
+
+/** Slim finding rows (the FindingPreview columns) for the given reviews —
+ *  the PR-list FINDINGS column popover's data. */
+export async function findingPreviewsByReviewIds(
+  db: Db,
+  reviewIds: string[],
+): Promise<
+  {
+    reviewId: string;
+    id: string;
+    severity: string;
+    category: string;
+    title: string;
+    file: string;
+    startLine: number;
+    endLine: number;
+    confidence: number;
+    rationale: string;
+  }[]
+> {
+  if (reviewIds.length === 0) return [];
+  return db
+    .select({
+      reviewId: t.findings.reviewId,
+      id: t.findings.id,
+      severity: t.findings.severity,
+      category: t.findings.category,
+      title: t.findings.title,
+      file: t.findings.file,
+      startLine: t.findings.startLine,
+      endLine: t.findings.endLine,
+      confidence: t.findings.confidence,
+      rationale: t.findings.rationale,
+    })
+    .from(t.findings)
+    .where(inArray(t.findings.reviewId, reviewIds));
+}
+
 export async function insertReview(
   db: Db,
   values: {

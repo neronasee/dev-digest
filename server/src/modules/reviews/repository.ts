@@ -64,6 +64,48 @@ export class ReviewRepository {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
+  // ---- PR-list rollup read surface (B2; consumed by the pulls module via
+  // container.reviewRepo — pulls never queries these tables itself) ----------
+
+  /** Newest-first review SCORE rows for a PR set (kind='review' only). */
+  latestReviewScores(prIds: string[]): Promise<{ prId: string; score: number | null }[]> {
+    return reviewRepo.latestReviewScores(this.db, prIds);
+  }
+
+  /** Newest-first (ran_at desc) status='done' run rows for a PR set. */
+  doneRunsForPrs(
+    prIds: string[],
+  ): Promise<
+    { id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; status: string }[]
+  > {
+    return runRepo.doneRunsForPrs(this.db, prIds);
+  }
+
+  /** Reviews produced by the given runs (id + runId). */
+  reviewIdsByRunIds(runIds: string[]): Promise<{ id: string; runId: string | null }[]> {
+    return reviewRepo.reviewIdsByRunIds(this.db, runIds);
+  }
+
+  /** Slim finding-preview rows for the given reviews. */
+  findingPreviewsByReviewIds(
+    reviewIds: string[],
+  ): Promise<
+    {
+      reviewId: string;
+      id: string;
+      severity: string;
+      category: string;
+      title: string;
+      file: string;
+      startLine: number;
+      endLine: number;
+      confidence: number;
+      rationale: string;
+    }[]
+  > {
+    return reviewRepo.findingPreviewsByReviewIds(this.db, reviewIds);
+  }
+
   getReview(reviewId: string): Promise<ReviewRow | undefined> {
     return reviewRepo.getReview(this.db, reviewId);
   }

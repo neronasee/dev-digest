@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { sql } from 'drizzle-orm';
-import { eq } from 'drizzle-orm';
+import { sql, and, eq } from 'drizzle-orm';
 import { startPg, dockerAvailable, type PgFixture } from './helpers/pg.js';
 import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
@@ -112,22 +111,42 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     await app.close();
   });
 
-  it('GET /repos/:id/pulls imports PRs (mock GitHub) idempotently', async () => {
+  it('GET /repos/:id/pulls is a pure read — GitHub sync runs as a background job (B11)', async () => {
     const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
     const app = await buildApp({
       config,
       db: pg.handle.db,
       overrides: { git: new MockGitClient(), github: new MockGitHubClient() },
     });
-    const repos = await app.inject({ method: 'GET', url: '/repos' });
-    const repoId = repos.json()[0]!.id;
+    const [ws] = await pg.handle.db.select().from(t.workspaces);
+    // Fresh repo with NO persisted PRs, marked just-polled (NOT stale) so the
+    // read stays pure — no opportunistic sync gets enqueued on this GET.
+    const [repo] = await pg.handle.db
+      .insert(t.repos)
+      .values({
+        workspaceId: ws!.id,
+        owner: 'acme',
+        name: 'pure-read',
+        fullName: 'acme/pure-read',
+        lastPolledAt: new Date(),
+      })
+      .returning();
 
-    const first = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
+    const first = await app.inject({ method: 'GET', url: `/repos/${repo!.id}/pulls` });
     expect(first.statusCode).toBe(200);
-    expect(first.json().length).toBeGreaterThan(0);
-    // import again → still idempotent (unique repo_id+number)
-    const second = await app.inject({ method: 'GET', url: `/repos/${repoId}/pulls` });
-    expect(second.json().length).toBe(first.json().length);
+    expect(first.json()).toHaveLength(0); // pure read — nothing imported on the read path
+
+    // The GitHub import moved into the `pulls-sync` job: run it, read again.
+    const job = await app.container.jobs.enqueue(ws!.id, 'pulls-sync', { repoId: repo!.id });
+    await job.done;
+    const second = await app.inject({ method: 'GET', url: `/repos/${repo!.id}/pulls` });
+    expect(second.json().length).toBeGreaterThan(0); // mock PR imported off-path
+
+    // Re-sync is idempotent (unique repo_id+number → update, never duplicate).
+    const again = await app.container.jobs.enqueue(ws!.id, 'pulls-sync', { repoId: repo!.id });
+    await again.done;
+    const third = await app.inject({ method: 'GET', url: `/repos/${repo!.id}/pulls` });
+    expect(third.json().length).toBe(second.json().length);
     await app.close();
   });
 
@@ -160,7 +179,61 @@ d('Testcontainers: DB-backed routes via app.inject', () => {
     // The seeded run is status='done' but deliberately UNPRICED (cost null),
     // so the whole round is unpriced → cost_usd null (renders "—", not $0.00).
     expect(pr482.cost_usd).toBeNull();
+    // This GET opportunistically enqueued a background sync (repo never
+    // polled) — let it drain before closing so no job outlives the app.
+    await app.container.jobs.onIdle();
     await app.close();
+  });
+
+  it('GET /pulls/:id serializes the GitHub detail online and the persisted rows offline', async () => {
+    const config = loadConfig({ ...process.env, NODE_ENV: 'test' } as NodeJS.ProcessEnv);
+    const [repo] = await pg.handle.db
+      .select()
+      .from(t.repos)
+      .where(eq(t.repos.fullName, 'acme/payments-api'));
+    const [pr] = await pg.handle.db
+      .select()
+      .from(t.pullRequests)
+      .where(and(eq(t.pullRequests.repoId, repo!.id), eq(t.pullRequests.number, 482)));
+
+    // Online: the mock detail refresh wins (body + files/commits persisted).
+    const app = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new MockGitHubClient() },
+    });
+    const online = await app.inject({ method: 'GET', url: `/pulls/${pr!.id}` });
+    expect(online.statusCode).toBe(200);
+    expect(online.json().id).toBe(pr!.id);
+    expect(online.json().files.length).toBeGreaterThan(0);
+    expect(online.json().commits.length).toBeGreaterThan(0);
+    await app.container.jobs.onIdle();
+    await app.close();
+
+    // Offline (detail fetch fails): the local-first fallback serves the
+    // persisted files/commits — never a failed read.
+    class OfflineGitHubClient extends MockGitHubClient {
+      override async getPullRequest(): Promise<never> {
+        throw new Error('offline');
+      }
+      override async listPullRequests(): Promise<never> {
+        throw new Error('offline');
+      }
+    }
+    const app2 = await buildApp({
+      config,
+      db: pg.handle.db,
+      overrides: { git: new MockGitClient(), github: new OfflineGitHubClient() },
+    });
+    const offline = await app2.inject({ method: 'GET', url: `/pulls/${pr!.id}` });
+    expect(offline.statusCode).toBe(200);
+    expect(offline.json().id).toBe(pr!.id);
+    // The online pass above persisted the mock's files/commits — the offline
+    // fallback serves exactly those rows.
+    expect(offline.json().files.length).toBeGreaterThan(0);
+    expect(offline.json().commits.length).toBeGreaterThan(0);
+    await app2.container.jobs.onIdle();
+    await app2.close();
   });
 
   it('POST /repos/:id/poll syncs PR list and does NOT trigger a review', async () => {

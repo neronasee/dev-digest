@@ -3,9 +3,11 @@
  * exported early so the pipeline lands against a single source of truth.
  */
 
-// --- Job kinds (registered on JobRunner; enqueued from repos/service.ts) ----
-export const INDEX_JOB_KIND = 'repo-intel-index';
-export const REFRESH_JOB_KIND = 'repo-intel-refresh';
+// --- Job kinds (registered on JobRunner) -------------------------------------
+// INDEX/REFRESH are cross-module contracts (enqueued by repos/service.ts), so
+// they are defined in modules/_shared/job-kinds.ts and re-exported here for
+// repo-intel-internal use. RESYNC is repo-intel-only.
+export { INDEX_JOB_KIND, REFRESH_JOB_KIND } from '../_shared/job-kinds.js';
 /** Manual "re-analyze": fetch latest from origin + incremental reindex. */
 export const RESYNC_JOB_KIND = 'repo-intel-resync';
 

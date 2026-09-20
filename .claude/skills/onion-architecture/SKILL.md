@@ -63,8 +63,8 @@ Innermost → outermost:
 ## Enforcement
 
 `pnpm depcruise` in `server/` (config: `server/.dependency-cruiser.cjs`) fails
-the build on `error`-severity violations. Today: **0 errors, 14 warnings**
-(145 modules, 452 dependencies). Warnings are a tracked burn-down baseline —
+the build on `error`-severity violations. Today: **0 errors, 4 warnings**
+(155 modules, 487 dependencies). Warnings are a tracked burn-down baseline —
 see [`enforcement.md`](enforcement.md) — never permission to add violations.
 Never grow the warning count; shrink it, then promote the rule to `error`.
 Run `pnpm depcruise:all` to also gate reviewer-core purity

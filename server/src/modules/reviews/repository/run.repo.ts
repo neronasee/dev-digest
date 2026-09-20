@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
+import type { AgentRunRow } from '../../../db/rows.js';
 
 // ---- in-flight / history --------------------------------------------------
 
@@ -120,12 +121,37 @@ export async function deleteAgentRun(
   });
 }
 
-/** Mark a still-running run as cancelled (no-op if it already finished). */
-export async function cancelRunIfRunning(db: Db, runId: string): Promise<boolean> {
+/** One run of the workspace — the (id, workspaceId) lookup that guards the
+ *  cancel/trace seams (B12): a run of another workspace is invisible here. */
+export async function getRun(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<AgentRunRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(t.agentRuns)
+    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.workspaceId, workspaceId)));
+  return row;
+}
+
+/** Mark a still-running run of THIS workspace as cancelled (no-op if it already
+ *  finished or belongs to another workspace — B12 tenancy scope). */
+export async function cancelRunIfRunning(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<boolean> {
   const rows = await db
     .update(t.agentRuns)
     .set({ status: 'cancelled' })
-    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.status, 'running')))
+    .where(
+      and(
+        eq(t.agentRuns.id, runId),
+        eq(t.agentRuns.workspaceId, workspaceId),
+        eq(t.agentRuns.status, 'running'),
+      ),
+    )
     .returning({ id: t.agentRuns.id });
   return rows.length > 0;
 }
@@ -231,7 +257,19 @@ export async function saveRunTrace(db: Db, runId: string, trace: RunTrace): Prom
     .onConflictDoUpdate({ target: t.runTraces.runId, set: { trace } });
 }
 
-export async function getRunTrace(db: Db, runId: string): Promise<RunTrace | undefined> {
-  const [row] = await db.select().from(t.runTraces).where(eq(t.runTraces.runId, runId));
+/** The trace of a run of THIS workspace (B12 tenancy scope). `run_traces` has
+ *  no workspace_id of its own (PK = runId), so the scoping joins the owning
+ *  agent_runs row — a foreign run's trace is indistinguishable from a missing
+ *  one. */
+export async function getRunTrace(
+  db: Db,
+  workspaceId: string,
+  runId: string,
+): Promise<RunTrace | undefined> {
+  const [row] = await db
+    .select({ trace: t.runTraces.trace })
+    .from(t.runTraces)
+    .innerJoin(t.agentRuns, eq(t.agentRuns.id, t.runTraces.runId))
+    .where(and(eq(t.runTraces.runId, runId), eq(t.agentRuns.workspaceId, workspaceId)));
   return row ? (row.trace as RunTrace) : undefined;
 }

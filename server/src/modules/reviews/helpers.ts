@@ -2,6 +2,8 @@
  * Pure helpers for the review service (side-effect free; operate purely on
  * their arguments — no DB / network / `this`).
  */
+import { z } from 'zod';
+import { FindingRecord, ReviewRecord } from '@devdigest/shared';
 import type { Finding } from '@devdigest/shared';
 import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 
@@ -9,27 +11,12 @@ import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 // shared with the CI runner); re-exported here for backward-compatible imports.
 export { reduceReviews, sliceDiff } from '@devdigest/reviewer-core';
 
-export interface ReviewDtoFinding extends Finding {
-  review_id: string;
-  accepted_at: string | null;
-  dismissed_at: string | null;
-}
-
-export interface ReviewDto {
-  id: string;
-  pr_id: string;
-  agent_id: string | null;
-  run_id: string | null;
-  agent_name?: string | null;
-  kind: 'summary' | 'review';
-  verdict: string | null;
-  summary: string | null;
-  score: number | null;
-  model: string | null;
-  grounding?: string | null;
-  created_at: string;
-  findings: ReviewDtoFinding[];
-}
+/**
+ * B7 — the review DTOs ARE the shared wire contracts (one definition drives
+ * validation and response serialization), not hand-written interfaces.
+ */
+export type ReviewDtoFinding = z.infer<typeof FindingRecord>;
+export type ReviewDto = z.infer<typeof ReviewRecord>;
 
 export function findingRowToDto(row: FindingRow): ReviewDtoFinding {
   return {
@@ -64,7 +51,11 @@ export function reviewToDto(
     run_id: review.runId,
     agent_name: agentName ?? null,
     kind: review.kind as 'summary' | 'review',
-    verdict: review.verdict,
+    // Invariant: verdicts are only ever written from the LLM boundary's
+    // zod-validated Review contract, so the free-text column always holds an
+    // enum value — the cast documents it (a corrupt row now fails response
+    // serialization loudly instead of shipping bad data).
+    verdict: review.verdict as ReviewDto['verdict'],
     summary: review.summary,
     score: review.score,
     model: review.model,

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -76,6 +76,20 @@ export class AgentsRepository {
       .from(t.agents)
       .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, id)));
     return row;
+  }
+
+  /**
+   * Names for a SET of agent ids in one query (B20 — replaces the per-agent
+   * `getById` loop in reviewsForPull). Workspace-scoped like every other read;
+   * ids from another workspace (or deleted agents) are simply absent from the
+   * result — the caller maps missing ids to a null name.
+   */
+  async namesByIds(workspaceId: string, ids: string[]): Promise<{ id: string; name: string }[]> {
+    if (ids.length === 0) return [];
+    return this.db
+      .select({ id: t.agents.id, name: t.agents.name })
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), inArray(t.agents.id, ids)));
   }
 
   /** Delete an agent (scoped to workspace). Versions/skill-links cascade;

@@ -51,3 +51,9 @@ and a per-agent `repo_intel` flag.
 
 - `GET /repos/:id/index-state` — index status (drives the **Indexed** badge).
 - `POST /repos/:id/resync` — enqueue a re-index.
+
+Both routes are tenancy-gated (B12): the repoId is verified against a
+workspace-scoped `repos` lookup first — a repo of another workspace 404s,
+indistinguishable from a missing one. The facade methods stay tenant-agnostic
+(their job payloads were authorized at enqueue time); the gate lives at the
+transport edge (`routes.ts` → `RepoIntelService.assertRepoInWorkspace`).

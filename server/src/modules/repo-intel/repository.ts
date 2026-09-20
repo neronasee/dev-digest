@@ -147,6 +147,21 @@ export class RepoIntelRepository {
     return row ?? null;
   }
 
+  /**
+   * B12 — does this repo belong to this workspace? The workspace-scoped parent
+   * `repos` lookup HTTP routes gate on before acting on a repoId (mirrors
+   * pulls/repository.getRepo). Job-driven paths skip it deliberately: their
+   * payloads came out of an authenticated request at enqueue time.
+   */
+  async repoInWorkspace(workspaceId: string, repoId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: t.repos.id })
+      .from(t.repos)
+      .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, repoId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
   /** All cached symbols for a repo (from blast's persistence). */
   async getCachedSymbols(repoId: string): Promise<CachedSymbolRow[]> {
     return this.db

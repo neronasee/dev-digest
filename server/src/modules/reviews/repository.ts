@@ -13,8 +13,8 @@ import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
  * composes them so its public API stays identical.
  */
 
-import type { FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow } from '../../db/rows.js';
-export type { FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow };
+import type { AgentRunRow, FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow } from '../../db/rows.js';
+export type { AgentRunRow, FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow };
 
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';
@@ -156,9 +156,16 @@ export class ReviewRepository {
     return runRepo.deleteAgentRun(this.db, workspaceId, runId);
   }
 
-  /** Mark a still-running run as cancelled (no-op if it already finished). */
-  cancelRunIfRunning(runId: string): Promise<boolean> {
-    return runRepo.cancelRunIfRunning(this.db, runId);
+  /** One run of the workspace — the (id, workspaceId) guard behind the cancel
+   *  and trace seams (B12). */
+  getRun(workspaceId: string, runId: string): Promise<AgentRunRow | undefined> {
+    return runRepo.getRun(this.db, workspaceId, runId);
+  }
+
+  /** Mark a still-running run of THIS workspace as cancelled (no-op if it
+   *  already finished or belongs to another workspace). */
+  cancelRunIfRunning(workspaceId: string, runId: string): Promise<boolean> {
+    return runRepo.cancelRunIfRunning(this.db, workspaceId, runId);
   }
 
   /** On boot: any run still 'running' is orphaned (its process died / restarted),
@@ -257,7 +264,8 @@ export class ReviewRepository {
     return runRepo.saveRunTrace(this.db, runId, trace);
   }
 
-  getRunTrace(runId: string): Promise<RunTrace | undefined> {
-    return runRepo.getRunTrace(this.db, runId);
+  /** The trace of a run of THIS workspace (undefined for a foreign run). */
+  getRunTrace(workspaceId: string, runId: string): Promise<RunTrace | undefined> {
+    return runRepo.getRunTrace(this.db, workspaceId, runId);
   }
 }

@@ -60,9 +60,9 @@ pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type err-long 
 pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type dot | dot -Tsvg > graph.svg
 ```
 
-## Baseline (2026-09-20, after the Wave-1 ratchet event)
+## Baseline (2026-09-20, after the Wave-2 B14 fix)
 
-**0 errors, 5 warnings — 155 modules, 480 dependencies.**
+**0 errors, 4 warnings — 155 modules, 482 dependencies.**
 
 History: 2026-09-19 baseline was **0 errors / 14 warnings / 145 modules /
 454 deps** (the 2026-09-19 R5 fix had already dropped `node_modules` from
@@ -79,10 +79,11 @@ zero, and they were **promoted to `error`** in the same change:
 - `no-cross-module-internals` — was **1 edge** (`repos/service.ts →
   repo-intel/constants.js`) → **0** via B13 (constants hoisted to
   `modules/_shared/job-kinds.ts`). Now error-severity.
-- `no-circular` — **5 cycles**: four through the composition root
+- `no-circular` — **4 cycles**: all four through the composition root
   (`repo-intel/service|pipeline ↔ container`, accepted per the decision log
-  — see README) plus one genuine `agents/helpers ↔ agents/repository` cycle,
-  scheduled for the Wave-2 B14 fix (→ 4, the accepted floor).
+  — see README). The fifth — the genuine `agents/helpers ↔ agents/repository`
+  cycle — was removed by the Wave-2 B14 fix (helpers imports the row types
+  from `db/rows.ts` instead of the repository) → **4, the accepted floor**.
 
 ## What the gate cannot see
 

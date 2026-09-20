@@ -1,3 +1,8 @@
+/**
+ * DB layer — reviews + findings queries (B2 PR-list rollup read surface
+ * included). Owns the `reviews` and `findings` tables; consumed only by the
+ * ReviewRepository facade (../repository.ts). No HTTP, no business rules.
+ */
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';

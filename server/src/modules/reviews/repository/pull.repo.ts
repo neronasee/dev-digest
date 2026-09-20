@@ -1,3 +1,9 @@
+/**
+ * DB layer — the PR anchor of the review domain: workspace-scoped lookups of
+ * the parent `repos` / `pull_requests` rows, plus `pr_files` and `pr_intent`
+ * (incl. the review-side markReviewed / intent upserts). Consumed only by the
+ * ReviewRepository facade (../repository.ts). No HTTP, no business rules.
+ */
 import { and, eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';

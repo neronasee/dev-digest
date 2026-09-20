@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "architecture-patterns": {
-      "source": "sickn33/antigravity-awesome-skills",
-      "sourceType": "github",
-      "skillPath": "skills/architecture-patterns/SKILL.md",
-      "computedHash": "df4b1173a32fe59a5da5a9cadd9bd23c21a9e944e3d26827d0d98f6b9afd5d11"
-    },
     "drizzle-orm-patterns": {
       "source": "giuseppe-trisciuoglio/developer-kit",
       "sourceType": "github",
@@ -18,12 +12,6 @@
       "sourceType": "github",
       "skillPath": "skills/fastify/SKILL.md",
       "computedHash": "269924684709b8c6f50a569ef988e66031efb822ef92cba6c8dfa160e54ed4d4"
-    },
-    "github-workflow-automation": {
-      "source": "ruvnet/ruflo",
-      "sourceType": "github",
-      "skillPath": ".agents/skills/github-workflow-automation/SKILL.md",
-      "computedHash": "7a9543669bb172b9f76ad64a617f935996dcb6fdbef15857adab6ae06994bc67"
     },
     "next-best-practices": {
       "source": "vercel-labs/next-skills",

@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { z } from 'zod';
 import type { SecretsProvider, SecretKey } from '@devdigest/shared';
 
 /**
@@ -25,8 +26,12 @@ export class LocalSecretsProvider implements SecretsProvider {
     if (this.cache) return this.cache;
     let data: Record<string, string> = {};
     try {
-      const parsed = JSON.parse(await readFile(this.filePath, 'utf8'));
-      if (parsed && typeof parsed === 'object') data = parsed as Record<string, string>;
+      const parsed: unknown = JSON.parse(await readFile(this.filePath, 'utf8'));
+      // Shape-check the whole record (string keys → string values): a corrupt
+      // file (arrays, nested objects, non-string values) must not leak into
+      // the cache cast-lie — fall back to "no stored overrides".
+      const result = z.record(z.string()).safeParse(parsed);
+      if (result.success) data = result.data;
     } catch {
       // Missing or unreadable file → no stored overrides yet.
     }

@@ -52,6 +52,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
         ? false
         : {
             level: config.logLevel,
+            // Never let credentials reach the log stream.
+            redact: {
+              paths: ['req.headers.authorization', '*.token', '*.apiKey', '*.secret'],
+              censor: '[REDACTED]',
+            },
             transport:
               config.nodeEnv === 'development'
                 ? { target: 'pino-pretty', options: { colorize: true } }
@@ -158,9 +163,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     }
     app.log.error(err);
     const e = err as { statusCode?: number; message?: string };
-    reply.status(e.statusCode ?? 500).send({
-      error: { code: 'internal_error', message: e.message ?? 'Internal error' },
-    });
+    const status = e.statusCode ?? 500;
+    // 5xx/unknown errors: the raw message can be a leaked driver/Postgres
+    // error — send a generic one; the detail lives in app.log.error above.
+    // Known sub-500 framework errors keep their (safe) message.
+    const message = status >= 500 ? 'Internal error' : (e.message ?? 'Internal error');
+    reply.status(status).send({ error: { code: 'internal_error', message } });
   });
 
   // Register feature modules from the static registry (src/modules/index.ts).

@@ -16,12 +16,18 @@ function clockTime(): string {
   return new Date().toTimeString().slice(0, 8);
 }
 
+/** How long a completed run's replay state (buffer/seq/completed marker) is
+ *  kept for late SSE subscribers before being evicted. Bounded memory: without
+ *  this, every run's full event buffer lives for the process lifetime. */
+const REPLAY_RETENTION_MS = 10 * 60 * 1000;
+
 export class RunBus {
   private emitters = new Map<string, EventEmitter>();
   private buffers = new Map<string, RunEvent[]>();
   private seq = new Map<string, number>();
   private completed = new Set<string>();
   private cancelled = new Set<string>();
+  private evictions = new Map<string, NodeJS.Timeout>();
 
   /** Request cancellation of an in-flight run. The runner checks `isCancelled`
    *  at its next checkpoint (between map-reduce files) and stops. */
@@ -50,6 +56,9 @@ export class RunBus {
 
   /** Publish a live event for a run. Returns the constructed RunEvent. */
   publish(runId: string, kind: RunEventKind, msg: string, data?: unknown): RunEvent {
+    // A publish while an eviction is pending means the runId was reused by a
+    // new run — cancel the eviction so the new run's state is not yanked out.
+    this.cancelEviction(runId);
     const e = this.emitterFor(runId);
     const next = (this.seq.get(runId) ?? 0) + 1;
     this.seq.set(runId, next);
@@ -72,7 +81,9 @@ export class RunBus {
     return this.buffers.get(runId) ?? [];
   }
 
-  /** Signal completion and release buffers/emitters. */
+  /** Signal completion and release emitters. Replay state (buffer/seq/
+   *  completed marker) stays for late subscribers, then is evicted after
+   *  REPLAY_RETENTION_MS (re-publishing the runId cancels the eviction). */
   complete(runId: string): void {
     const e = this.emitters.get(runId);
     this.completed.add(runId);
@@ -80,6 +91,31 @@ export class RunBus {
     e?.emit('done');
     // Keep the buffer briefly available for late subscribers; clear emitter.
     this.emitters.delete(runId);
+    this.scheduleEviction(runId);
+  }
+
+  /** Evict a completed run's replay state once its retention window expires.
+   *  The timer is unref'd (never holds the process open) and a repeated
+   *  complete() restarts the window. */
+  private scheduleEviction(runId: string): void {
+    this.cancelEviction(runId);
+    const timer = setTimeout(() => {
+      this.evictions.delete(runId);
+      this.emitters.delete(runId);
+      this.buffers.delete(runId);
+      this.seq.delete(runId);
+      this.completed.delete(runId);
+    }, REPLAY_RETENTION_MS);
+    timer.unref();
+    this.evictions.set(runId, timer);
+  }
+
+  private cancelEviction(runId: string): void {
+    const timer = this.evictions.get(runId);
+    if (timer) {
+      clearTimeout(timer);
+      this.evictions.delete(runId);
+    }
   }
 
   /** Whether a run has already completed (for replay-then-end late subscribers). */

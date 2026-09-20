@@ -23,3 +23,6 @@ test-results/
 
 # emdash worktree config (local)
 .emdash.json
+
+# skill-eval iteration workspaces (skill-creator scaffolding, not shipped)
+.claude/skills/*-workspace/

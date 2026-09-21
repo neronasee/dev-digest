@@ -161,6 +161,13 @@ export interface RepoIntel {
   getUnresolvedReferences(repoId: string, files: string[]): Promise<RefRow[]>;
   /** Top-N file paths by rank, filtered of tests/configs. */
   getConventionSamples(repoId: string, n: number): Promise<string[]>;
+  /**
+   * Top-N TEST file paths by rank (test files only, other junk still dropped).
+   * The conventions extractor's sample: testing conventions are invisible in
+   * `getConventionSamples`, which filters tests out (right for review context,
+   * wrong for house-rule extraction).
+   */
+  getTestSamples(repoId: string, n: number): Promise<string[]>;
 
   // --- T3: onboarding reading-path + critical paths (graph required) ------
   getTopFilesByRank(

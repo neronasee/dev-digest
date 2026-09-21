@@ -4,7 +4,6 @@ import {
   type FeatureModelId,
 } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { rowsToSettings } from './helpers.js';
 
 /**
  * Per-feature model configuration.
@@ -15,8 +14,19 @@ import { rowsToSettings } from './helpers.js';
  * registry default in `FEATURE_MODELS` — which mirrors each module's old
  * constant, so behaviour is unchanged until a model is explicitly picked.
  *
- * No raw SQL here — the settings rows come through SettingsRepository.
+ * Lives in `_shared` (not `settings`) so any module's service can resolve its
+ * model without importing another module's internals (depcruise
+ * `no-cross-module-internals`). No raw SQL here — the settings rows come
+ * through SettingsRepository.
  */
+
+/** Inline fold of settings rows to a key→value map (the settings module's own
+ *  `rowsToSettings` is off-limits from here for the same depcruise reason). */
+function rowsToMap(rows: { key: string; value: unknown }[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const r of rows) out[r.key] = r.value;
+  return out;
+}
 
 const DEFAULTS = Object.fromEntries(
   FEATURE_MODELS.map((f) => [f.id, { provider: f.defaultProvider, model: f.defaultModel }]),
@@ -39,7 +49,7 @@ export async function getFeatureModelOverride(
   id: FeatureModelId,
 ): Promise<FeatureModelChoice | undefined> {
   const rows = await container.settingsRepo.list(workspaceId);
-  const fm = (rowsToSettings(rows) as { feature_models?: Record<string, unknown> }).feature_models;
+  const fm = (rowsToMap(rows) as { feature_models?: Record<string, unknown> }).feature_models;
   const parsed = FeatureModelChoice.safeParse(fm?.[id]);
   return parsed.success ? parsed.data : undefined;
 }

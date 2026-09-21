@@ -36,24 +36,28 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 
 **client** — components render and react to interaction (React Testing Library
 + jsdom). `fetch` is mocked; no API, DB, or browser. Covers the PR-review
-surface (list, diff, findings, run controls) and the agent editor.
+surface (list, diff, findings, run controls), the agent editor, and the
+conventions triage board + create-skill modal.
 
 **server-unit** — the DB-free majority: adapters, prompt assembly, grounding,
-repo-intel ranking & indexing, pricing, route smoke. The `typecheck` job also
+repo-intel ranking & indexing, pricing, route smoke, the conventions gate +
+scan helpers. The `typecheck` job also
 runs on Windows, which doubles as the `@ast-grep/napi` prebuilt gate (install
 fails there if the win32 prebuilt is missing).
 
 **server-integration** — the `*.it.test.ts` files. Each starts a real Postgres
 (pgvector) via testcontainers, builds the Fastify app, migrates + seeds, and
 drives routes end-to-end: reviews + run lifecycle (incl. grounding), agents CRUD,
-repo-intel symbol clamping, pulls comments, settings models. They self-skip when
-Docker is unavailable.
+repo-intel symbol clamping, pulls comments, settings models, and the
+conventions extraction end to end (sample → gate → triage → skill draft).
+They self-skip when Docker is unavailable.
 
 **reviewer-core** — the pure engine: `toReview` selection, prompt construction,
 and a `run` with a stubbed model → grounded findings. No DB / GitHub / FS.
 
 **e2e web** — see `e2e/README.md`. Deterministic agent-browser flows over the
-main journeys (boot → PR list → PR detail; agents) against a real seeded stack.
+main journeys (boot → PR list → PR detail; agents; the conventions board over
+seeded candidates — scan buttons never clicked) against a real seeded stack.
 No `chat`, no model key.
 
 ## Running locally

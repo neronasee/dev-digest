@@ -129,3 +129,28 @@ export function useSetAgentSkills() {
     },
   });
 }
+
+export interface LinkAgentSkillInput {
+  agentId: string;
+  skillId: string;
+}
+
+/**
+ * Link ONE skill to an agent, additively (the server upserts a single link and
+ * keeps every other link + its order). The replace-set `useSetAgentSkills`
+ * would wipe the agent's other skills — wrong tool for "attach the skill I
+ * just created". Used by the conventions Create-skill flow.
+ */
+export function useLinkAgentSkill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, skillId }: LinkAgentSkillInput) =>
+      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_id: skillId }),
+    onSuccess: (data, { agentId }) => {
+      qc.setQueryData(["agent-skills", agentId], data);
+      qc.invalidateQueries({ queryKey: ["skills"] });
+      qc.invalidateQueries({ queryKey: ["agents"] });
+      qc.invalidateQueries({ queryKey: ["agent", agentId] });
+    },
+  });
+}

@@ -119,3 +119,4 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `11-skill-detail` | `/skills` → card click opens the side-drawer preview → 'Open full editor' → `/skills/:id` Config/Preview/Versioning tabs |
 | `12-agent-skills-tab` | `/agents` → API Contract Reviewer → Skills tab → order caption, filter field, four bound skills (read-only) |
 | `13-run-trace-skills` | PR #483 → Agent runs → Trace drawer → Prompt assembly shows the Skills block AND its `~N tokens` label, asserted together via `wait --fn` (seeded demo run) |
+| `14-conventions` | Conventions page over SEEDED candidates (scan buttons never clicked — no model call): card fields, modal open/cancel, reject persists across reload, Create → `repo-conventions` skill visible on /skills. Mutates data — hermetic fresh DB only |

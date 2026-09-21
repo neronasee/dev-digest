@@ -1,0 +1,53 @@
+import type { CSSProperties } from "react";
+
+/** Co-located styles for SkillDetailView + its tabs. */
+export const s = {
+  wrap: { display: "flex", flexDirection: "column", height: "100%" } satisfies CSSProperties,
+  header: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "16px 28px 0",
+    flexShrink: 0,
+  } satisfies CSSProperties,
+  h1: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
+  tabsBar: { marginTop: 14 } satisfies CSSProperties,
+  body: { flex: 1, overflow: "auto", padding: 28 } satisfies CSSProperties,
+  form: { maxWidth: 680, display: "flex", flexDirection: "column" } satisfies CSSProperties,
+  saveRow: { display: "flex", justifyContent: "flex-end", marginTop: 6 } satisfies CSSProperties,
+  previewBox: {
+    maxWidth: 760,
+    padding: "16px 18px",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+    background: "var(--bg-surface)",
+  } satisfies CSSProperties,
+  versionRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "10px 12px",
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: "var(--bg-surface)",
+    marginBottom: 8,
+  } satisfies CSSProperties,
+  versionRowCurrent: { borderColor: "var(--border-strong)", background: "var(--bg-hover)" } satisfies CSSProperties,
+  versionNum: { fontWeight: 650, minWidth: 42 } satisfies CSSProperties,
+  versionDate: { fontSize: 12.5, color: "var(--text-muted)" } satisfies CSSProperties,
+  rowButtons: { marginLeft: "auto", display: "flex", gap: 8 } satisfies CSSProperties,
+  diffPre: {
+    maxHeight: 420,
+    overflow: "auto",
+    fontSize: 12.5,
+    lineHeight: 1.5,
+    margin: 0,
+    padding: 12,
+    borderRadius: 8,
+    border: "1px solid var(--border)",
+    background: "var(--bg-primary)",
+  } satisfies CSSProperties,
+  diffAdded: { color: "var(--ok)", background: "rgba(16,185,129,.08)", display: "block" } satisfies CSSProperties,
+  diffRemoved: { color: "var(--crit)", background: "rgba(239,68,68,.08)", display: "block" } satisfies CSSProperties,
+  diffSame: { color: "var(--text-secondary)", display: "block" } satisfies CSSProperties,
+} as const;

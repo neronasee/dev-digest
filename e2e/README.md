@@ -109,3 +109,7 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-pr-list-findings` | PR list → FINDINGS column pills → hover popover «N FINDINGS IN THIS RUN» (read-only previews) |
 | `09-agent-editor` | `/agents` → click the seeded agent card → editor route's Config tab renders (read-only, no save) |
+| `10-skills-page` | `/skills` → SKILLS LAB nav section → seeded skill cards incl. flake-watch's Imported provenance |
+| `11-skill-detail` | `/skills` → card click opens the side-drawer preview → 'Open full editor' → `/skills/:id` Config/Preview/Versioning tabs |
+| `12-agent-skills-tab` | `/agents` → API Contract Reviewer → Skills tab → order caption, filter field, four bound skills (read-only) |
+| `13-run-trace-skills` | PR #483 → Agent runs → Trace drawer → Prompt assembly shows the Skills block (seeded demo run) |

@@ -115,7 +115,13 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+export const SkillSource = z.enum([
+  'manual',
+  'imported_url',
+  'imported_file',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -130,6 +136,21 @@ export const Skill = z.object({
   evidence_files: z.array(z.string()).nullish(),
 });
 export type Skill = z.infer<typeof Skill>;
+
+/** A skill plus the number of agents it is linked to (Skills page cards). */
+export const SkillSummary = Skill.extend({
+  agent_count: z.number().int(),
+});
+export type SkillSummary = z.infer<typeof SkillSummary>;
+
+/** One immutable entry in a skill's version history (skill_versions row). */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int().positive(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
 
 export const CommunitySkill = z.object({
   name: z.string(),

@@ -20,13 +20,13 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-21 — `wait --text` sees DOM TEXT only: a form field's placeholder attribute is invisible to it (locator on the input's aria-label via `find`, or assert on surrounding labels instead) — the agent Skills tab's 'Filter skills…' placeholder cannot be asserted with wait --text. (specs/12-agent-skills-tab.flow.json)
 
 ## Codebase Patterns
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-21 — A 'seed'-model `agent_runs` row + hand-built `run_traces` doc in seed.ts lets flows assert trace rendering (skills block, log lines) with zero model calls — the flow opens the PR's Agent runs tab and clicks the run's Trace MonoLink like any real run. (../server/src/db/seed.ts, specs/13-run-trace-skills.flow.json)
 
 ## Tool & Library Notes
 
@@ -54,4 +54,4 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-21 — `agent-browser wait --text "Skills (dynamic)"` times out even when the string IS in the trace drawer's DOM (seeded trace verified correct by reading run_traces directly; the section was expanded first; `wait --help` documents --text as substring match) — suspect the text engine's handling of parentheses or whitespace normalization; next debugging step is a DOM dump on a live page (`agent-browser eval document.body.innerText` or find-by-prefix "Skills (") rather than another blind flow re-run. (specs/13-run-trace-skills.flow.json)

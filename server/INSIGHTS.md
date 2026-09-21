@@ -23,12 +23,14 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-21 — Don't assert trace existence off a run row's terminal status: `runOneAgent` flips `agent_runs` to done BEFORE `saveRunTrace` writes the document (the SSE `complete` fires after the save, so live clients are fine), and a test that selects `run_traces` right after `waitForPrRuns` races the write — poll for the trace row instead. (src/modules/reviews/run-executor.ts, test/runs-skills.it.test.ts)
 
 ## Codebase Patterns
 
 <!-- newest on top -->
 
+- 2026-09-21 — A seeded PR whose `pr_files` rows have no `patch` produces an EMPTY review diff: `loadDiff` prefers a real git diff (fails on clonePath null), then `diffFromPrFiles` skips patch-less files entirely — PR #482 seeds exactly this way; experiment PRs #483/#484 carry real unified-diff hunks (headers excluded — `diffFromPrFiles` re-adds them; grounding only accepts citations inside hunk line ranges). (src/modules/reviews/diff-loader.ts, src/db/seed-diffs.ts)
+- 2026-09-21 — Drizzle `text(col, { enum: [...] })` columns carry NO Postgres CHECK constraint, so widening an enum (e.g. `skills.source` += 'imported_file') is a one-line schema edit with NO migration — and no `pnpm db:generate`; the DB never constrained the value. (src/db/schema/skills.ts, specs/02-skills.md)
 - 2026-09-20 — B5's deferred promotion call: `PollResult` (polling) and `WorkspaceSummary`/`WorkspaceRepoSummary` (workspace) stay MODULE-LOCAL response schemas — the client defines no useWorkspace/usePoll hooks and never calls `/workspace` or `POST /repos/:id/poll` (its only "poll" is repo-intel's index-state `refetchInterval`), so there is no shared consumer to promote for; revisit only when a client hook starts importing the shape. (src/modules/polling/routes.ts:9, src/modules/workspace/routes.ts:6)
 - 2026-09-20 — There is NO polling scheduler anywhere: `polling_interval_min` is a stored-but-unconsumed setting and POST /repos/:id/poll is manual — so the B11 read-path sync moved to an opportunistic `pulls-sync` JobRunner job enqueued by GET /repos/:id/pulls, gated by `repos.last_polled_at` staleness (SYNC_STALE_MS = 5 min) which the job itself bumps (markSynced), so reads self-throttle instead of enqueueing per request. (src/modules/pulls/service.ts)
 - 2026-09-20 — The PR-list rollup's correctness now spans two modules: the NEWEST-FIRST ordering lives in the reviews read surface (`doneRunsForPrs` ran_at desc, `latestReviewScores` created_at desc) while the sum/pick logic lives in `pulls/helpers.ts` — dropping the ORDER BY over there silently mis-sums costs/scores over here; the hermetic fixtures in `pulls/helpers.test.ts` feed rows in query order to pin this. (src/modules/pulls/helpers.ts, src/modules/reviews/repository/)
@@ -42,6 +44,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-21 — `pnpm remove <pkg>` is NOT a clean undo for an accidentally-added dependency: regenerating the lockfile with a newer pnpm reorders peer-suffix entries across the WHOLE file, producing a huge spurious diff — restore `pnpm-lock.yaml` (+ package.json) from git instead. Hit when `pnpm add fflate` was run in server/ instead of client/. (pnpm-lock.yaml)
 - 2026-09-20 — `z.enum()` needs a literal TUPLE: a `satisfies Union[]` on the array literal widens it to `string[]` and fails with TS2769 ("no overload matches") — `const X = [...] as const satisfies readonly Union[]` on a named const keeps the tuple while still pinning it to the TS union. (src/modules/repo-intel/routes.ts)
 - 2026-09-20 — A handler that conditionally returns two different response shapes widens literal fields across the union (`status: 'accepted'` → `string`) and fails the `response:` schema's static handler typing — `as const` on each returned object keeps the literal types the schema union expects. (src/modules/repo-intel/routes.ts)
 - 2026-09-20 — In drizzle-orm 0.38 (postgres-js) a `PostgresJsTransaction` is structurally ASSIGNABLE to `PostgresJsDatabase`, so repository helpers typed `db: Db` already accept a `tx` unchanged — the `DbOrTx = Db | Tx` union in `db/client.ts` is intent documentation plus a tripwire: if a drizzle bump breaks the aliasing, the union is where the compile fails first. (src/db/client.ts)
@@ -57,6 +60,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-21 — `expected undefined to be 1` on a freshly-injected DTO field inside an .it test is usually the request having 409'd/422'd, not a mapper bug: `app.inject(...).json()` returns the `{error: ...}` envelope on failure, and within one suite the DB is SHARED across `it` blocks, so a second `POST /skills` with the same name hits the duplicate-name 409 — unique-ify seed names per test. (test/skills-crud.it.test.ts)
 - 2026-09-20 — `pnpm typecheck` in server/ failing with `TS2307: Cannot find module 'openai'/'zod'` pointed at `../reviewer-core/src/...` files means reviewer-core's `node_modules` is missing, not a server dep problem — server's tsconfig path-alias compiles reviewer-core TypeScript sources directly, so any fresh checkout/worktree must `npm install` in reviewer-core/ before server typecheck (or vitest) can run. (server/tsconfig.json paths → ../reviewer-core/src)
 - 2026-09-16 — `pnpm db:migrate` failing with `column "cost_usd" … already exists` on the dev DB means the DB drifted onto a foreign migration history (leftover fork volume: extra journal hashes + extra columns) — drop/recreate the `devdigest` database (it only holds seed data), re-run migrate + seed; DROP DATABASE first terminates the idle `postgres.js` pool session held by the running dev API or it fails with "being accessed by other users" (the pool reconnects on next query, no API restart needed). (src/db/migrations/)
 

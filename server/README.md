@@ -74,6 +74,9 @@ flowchart TB
   subgraph Agents["Agents"]
     agents["agents<br/>/agents · /agents/:id"]
   end
+  subgraph SkillsLab["Skills Lab"]
+    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions"]
+  end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
   end
@@ -106,7 +109,9 @@ through `SecretsProvider` (`~/.devdigest/secrets.json`, mode `0600`, with
 
 Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
-(`acme/payments-api`, PR #482, the two built-in agents).
+(`acme/payments-api`, PR #482–#484, the five built-in agents, and the eight
+Skills Lab skills — see [`specs/02-skills.md`](specs/02-skills.md) for the
+skills trust/versioning decisions).
 
 ## Review context (non-obvious)
 

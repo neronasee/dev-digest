@@ -15,12 +15,14 @@ Contract:
 <!-- newest on top -->
 
 - 2026-09-21 — Run outcome UI must consume the persisted verdict/blocker snapshot rather than re-counting mutable finding rows, otherwise dismissing a finding retroactively recolors historical timelines and accordions. (src/app/repos/[repoId]/pulls/[number]/_components/RunHistory, ReviewRunAccordion)
+- 2026-09-21 — Build zip fixtures IN MEMORY for jsdom tests with fflate's `zipSync` and parse them with `unzipSync` — no binary fixture files, no FileReader mocking, and the ignore-non-markdown rule is directly assertable by zipping a `.sh` alongside the `.md`. (src/app/skills/_components/SkillsListView/_components/ImportSkillModal/helpers.test.ts)
 - 2026-09-20 — The enforced "fetch mocked" rule: setup.ts installs a throwing default `globalThis.fetch` (error names the URL), and tests opt out per test with `vi.stubGlobal("fetch", vi.fn(...))` — the setup's global `afterEach(vi.unstubAllGlobals)` restores the thrower between tests, so a mock never leaks and a missed mock fails loudly instead of hitting localhost:3001. (src/test/setup.ts)
 
 ## What Doesn't Work
 
 <!-- newest on top -->
 
+- 2026-09-21 — jsdom cannot fire HTML5 drag-and-drop: dispatching dragstart/drop does nothing through React's synthetic system — model reorder as a pure `reorderBound(ids, from, to)` helper (unit-tested) and let the component test assert only the `draggable` attribute + the mutation payload. (src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/)
 - 2026-09-17 — Even right-anchored + flipped, an absolutely-positioned popover inside the PR-list table card is clipped on SHORT tables (2 rows: no room below or above inside the card), and a `scroll`-capture close handler then misfires on the popover's OWN inner scrolling (wheel-to-read dismissed it) — the working shape is `position: fixed` anchored to the cell's viewport rect (re-anchored on outer scroll, inner scroll ignored via `popRef.contains(e.target)`), pinned header + contained-overscroll list. (pulls/_components/FindingsCell/FindingsCell.tsx:68)
 - 2026-09-17 — An absolutely-positioned popover that overhangs the PR-list table card gets clipped by its `overflow: hidden` (`s.tableCard`) — anchor it `right: 0` so it extends left over the 1fr title column, and flip up (`bottom: 100%`) for rows in the table's lower half. (pulls/_components/FindingsCell/styles.ts:22)
 

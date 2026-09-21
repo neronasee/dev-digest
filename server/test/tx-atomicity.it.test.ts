@@ -225,7 +225,7 @@ d('B3 tx-atomicity (Testcontainers pg)', () => {
     expect(versions.map((v) => v.version)).toEqual([1]); // no orphan v2 snapshot
   });
 
-  it('setSkills delete-then-insert: a bad skill id rolls back the wipe', async () => {
+  it('setSkills: a foreign skill id is rejected BEFORE the wipe (links + version untouched)', async () => {
     const agent = await agents.insert({
       workspaceId,
       name: 'Skillful',
@@ -244,18 +244,22 @@ d('B3 tx-atomicity (Testcontainers pg)', () => {
         body: 'b',
       })
       .returning();
-    await agents.linkSkill(agent.id, skill!.id, 0);
+    await agents.linkSkill(workspaceId, agent.id, skill!.id, 0);
 
-    // Final insert violates agent_skills.skill_id → skills.id (FK) AFTER the
-    // delete wiped the original link — the tx must restore it.
-    await expect(agents.setSkills(agent.id, [skill!.id, randomUUID()])).rejects.toThrow();
+    // The workspace pre-check fails on the unknown id BEFORE the delete-then-
+    // insert, so the original link survives and nothing resolves.
+    await expect(
+      agents.setSkills(workspaceId, agent.id, [skill!.id, randomUUID()]),
+    ).resolves.toBeUndefined();
 
     const links = await db
       .select()
       .from(t.agentSkills)
       .where(eq(t.agentSkills.agentId, agent.id));
-    expect(links).toHaveLength(1); // delete rolled back
+    expect(links).toHaveLength(1); // not wiped
     expect(links[0]!.skillId).toBe(skill!.id);
+    const [unchanged] = await db.select().from(t.agents).where(eq(t.agents.id, agent.id));
+    expect(unchanged!.version).toBe(2); // only the linkSkill bump; the rejected call was a no-op
   });
 
   // ---- repo-intel replace* batches -----------------------------------------

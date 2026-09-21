@@ -1,0 +1,20 @@
+{
+  "name": "Run trace shows the skills block of the prompt assembly",
+  "description": "Open the seeded PR #483 (refund endpoint with a happy-path test), switch to Agent runs, open the seeded run's Trace drawer, expand Prompt assembly, and confirm the 'Skills (dynamic)' block renders next to System and User / diff. The seeded run's trace was persisted with the four test-quality skills' composed block, so this pins the run-trace rendering end to end without any model call. Labels are DOM-cased ('Prompt assembly', 'Skills (dynamic)'); never locate on Badge content.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR list settles" },
+    { "cmd": ["find", "text", "Add refund endpoint with happy-path test", "click"], "label": "open the seeded experiment PR #483" },
+    { "cmd": ["wait", "--url", "/pulls/483"], "label": "PR detail route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Agent runs"], "label": "switch to the Agent runs tab" },
+    { "cmd": ["wait", "--url", "tab=findings"], "label": "runs tab active in the URL" },
+    { "cmd": ["wait", "--text", "Test Quality Reviewer"], "label": "the seeded run's agent row renders" },
+    { "cmd": ["find", "text", "Trace", "click"], "label": "open the run's trace drawer" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "trace fetch settles" },
+    { "cmd": ["wait", "--text", "Prompt assembly"], "label": "the prompt-assembly section renders" },
+    { "cmd": ["find", "text", "Prompt assembly", "click"], "label": "expand the collapsed Prompt assembly section" },
+    { "cmd": ["wait", "--text", "Skills (dynamic)"], "label": "the skills block renders inside prompt assembly" }
+  ]
+}

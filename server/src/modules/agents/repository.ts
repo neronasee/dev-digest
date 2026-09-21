@@ -241,15 +241,33 @@ export class AgentsRepository {
     return links.map((l) => l.skill.id);
   }
 
-  /** Link a skill to an agent at a given order (idempotent: upserts order). */
-  async linkSkill(agentId: string, skillId: string, order: number): Promise<void> {
-    await this.db
-      .insert(t.agentSkills)
-      .values({ agentId, skillId, order })
-      .onConflictDoUpdate({
-        target: [t.agentSkills.agentId, t.agentSkills.skillId],
-        set: { order },
-      });
+  /**
+   * Link a skill to an agent at a given order (idempotent: upserts order), then
+   * bump the agent's config version + snapshot. The linked-skill set is part of
+   * AgentVersionConfig, so a link change IS a config change (eval replays a past
+   * version → its skills must be reproducible). ONE transaction: links + bump +
+   * snapshot commit together. `skillId` must exist in `workspaceId` — a foreign
+   * or unknown id leaves the links untouched and returns undefined (route 404s).
+   */
+  async linkSkill(
+    workspaceId: string,
+    agentId: string,
+    skillId: string,
+    order: number,
+  ): Promise<AgentRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const existing = await this.getByIdIn(tx, workspaceId, agentId);
+      if (!existing) return undefined;
+      if (!(await this.ownsSkills(tx, workspaceId, [skillId]))) return undefined;
+      await tx
+        .insert(t.agentSkills)
+        .values({ agentId, skillId, order })
+        .onConflictDoUpdate({
+          target: [t.agentSkills.agentId, t.agentSkills.skillId],
+          set: { order },
+        });
+      return this.bumpVersionIn(tx, existing);
+    });
   }
 
   async unlinkSkill(agentId: string, skillId: string): Promise<void> {
@@ -261,17 +279,52 @@ export class AgentsRepository {
   /**
    * Replace the full set of linked skills for an agent with `skillIds`, assigning
    * order = index. Used by the "Skills" editor tab (attach/reorder). Skills not in
-   * the list are unlinked.
-   * B3 — ONE transaction: the delete-then-insert commits together, so a bad
-   * skill id can't leave the agent with ALL its links wiped.
+   * the list are unlinked. Every id must exist in `workspaceId` — one foreign id
+   * fails the whole call (undefined → route 404) instead of silently linking
+   * cross-tenant.
+   * B3 — ONE transaction: the delete-then-insert + version bump + snapshot
+   * commit together, so a bad skill id can't leave the agent with ALL its links
+   * wiped, and a bumped version never lacks its snapshot.
    */
-  async setSkills(agentId: string, skillIds: string[]): Promise<void> {
-    await this.db.transaction(async (tx) => {
+  async setSkills(
+    workspaceId: string,
+    agentId: string,
+    skillIds: string[],
+  ): Promise<AgentRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const existing = await this.getByIdIn(tx, workspaceId, agentId);
+      if (!existing) return undefined;
+      if (skillIds.length > 0 && !(await this.ownsSkills(tx, workspaceId, skillIds))) {
+        return undefined;
+      }
       await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
-      if (skillIds.length === 0) return;
-      await tx
-        .insert(t.agentSkills)
-        .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+      if (skillIds.length > 0) {
+        await tx
+          .insert(t.agentSkills)
+          .values(skillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+      }
+      return this.bumpVersionIn(tx, existing);
     });
+  }
+
+  /** True when every id is an existing skill of THIS workspace (tenancy guard). */
+  private async ownsSkills(client: DbOrTx, workspaceId: string, skillIds: string[]) {
+    const rows = await client
+      .select({ id: t.skills.id })
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), inArray(t.skills.id, skillIds)));
+    return rows.length === new Set(skillIds).size;
+  }
+
+  /** version+1 on the agent row + snapshot (reads the fresh links in-tx). */
+  private async bumpVersionIn(tx: DbOrTx, existing: AgentRow): Promise<AgentRow> {
+    const nextVersion = existing.version + 1;
+    const [row] = await tx
+      .update(t.agents)
+      .set({ version: nextVersion })
+      .where(eq(t.agents.id, existing.id))
+      .returning();
+    await this.snapshotVersion(tx, row!, nextVersion);
+    return row!;
   }
 }

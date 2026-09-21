@@ -50,7 +50,9 @@ export function ReviewRunAccordion({
   }, [review.run_id, targetRunId, targetRequest]);
   const del = useDeleteReview(prId);
   const findings = review.findings;
-  const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
+  // Historical run outcome is immutable: finding actions never rewrite the
+  // gate-aware blocker count captured when the run completed.
+  const blockers = review.blockers ?? 0;
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
 
   return (
@@ -142,6 +144,11 @@ export function ReviewRunAccordion({
                 blockers={blockers}
                 agentName={review.agent_name}
               />
+            </div>
+          )}
+          {(review.grounding_dropped ?? 0) > 0 && (
+            <div role="note" style={{ margin: "-4px 0 14px", color: "var(--warn)", fontSize: 12.5 }}>
+              {review.grounding_dropped} candidate finding{review.grounding_dropped === 1 ? "" : "s"} dropped by citation grounding
             </div>
           )}
           <FindingsPanel

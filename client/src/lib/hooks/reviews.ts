@@ -13,18 +13,13 @@ import type {
   ReviewRecord,
   ReviewRunResponse,
   RunSummary,
+  ActiveRunSummary,
 } from "@devdigest/shared";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
-export interface ActiveRun {
-  run_id: string;
-  agent_id: string | null;
-  agent_name: string | null;
-  ran_at: string | null;
-}
+export type ActiveRun = ActiveRunSummary;
 
-/** In-flight runs for a PR, from the server (agent_runs where status='running').
-   Survives reloads/devices; polls while anything is running so it self-clears. */
+/** Active queued/running runs for a PR. Survives reloads/devices. */
 export function usePrActiveRuns(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["pr-active-runs", prId],
@@ -43,7 +38,7 @@ export function usePrRuns(prId: string | null | undefined) {
     queryFn: () => api.get<RunSummary[]>(`/pulls/${prId}/runs`),
     enabled: !!prId,
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
+      (query.state.data ?? []).some((r) => r.status === "queued" || r.status === "running") ? 4000 : false,
   });
 }
 

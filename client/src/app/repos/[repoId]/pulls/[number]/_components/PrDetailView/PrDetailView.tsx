@@ -76,7 +76,6 @@ export function PrDetailView() {
     [runs],
   );
   const lethalTrifecta = allFindings.filter((f) => f.kind === "lethal_trifecta");
-  const findingsCount = allFindings.length;
 
   const repoName = activeRepo?.full_name ?? repoId;
   // The real "owner/repo" (null until the repo is loaded) — used to build
@@ -128,7 +127,7 @@ export function PrDetailView() {
         pr={pr}
         prId={prId}
         tab={tab}
-        findingsCount={findingsCount}
+        runsCount={prRuns?.length ?? 0}
         githubUrl={repoFullName ? githubPrUrl(repoFullName, pr.number) : null}
         onSetTab={setTab}
         onRunStart={() => setTab("findings")}

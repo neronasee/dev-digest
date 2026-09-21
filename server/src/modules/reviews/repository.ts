@@ -87,7 +87,11 @@ export class ReviewRepository {
   }
 
   /** Reviews for a PR (newest first), each with its findings. */
-  reviewsForPull(prId: string): Promise<{ review: ReviewRow; findings: FindingRow[] }[]> {
+  reviewsForPull(prId: string): Promise<{
+    review: ReviewRow;
+    findings: FindingRow[];
+    run: { grounding: string | null; groundingDropped: number | null; blockers: number | null } | null;
+  }[]> {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
@@ -103,7 +107,7 @@ export class ReviewRepository {
   doneRunsForPrs(
     prIds: string[],
   ): Promise<
-    { id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; status: string }[]
+    { id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; score: number | null; status: string }[]
   > {
     return runRepo.doneRunsForPrs(this.db, prIds);
   }
@@ -142,7 +146,7 @@ export class ReviewRepository {
   activeRunsForPull(
     workspaceId: string,
     prId: string,
-  ): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; ran_at: string | null }[]> {
+  ): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; status: 'queued' | 'running'; ran_at: string | null; started_at: string | null }[]> {
     return runRepo.activeRunsForPull(this.db, workspaceId, prId);
   }
 
@@ -162,14 +166,14 @@ export class ReviewRepository {
     return runRepo.getRun(this.db, workspaceId, runId);
   }
 
-  /** Mark a still-running run of THIS workspace as cancelled (no-op if it
+  /** Mark a queued/running run of THIS workspace as cancelled (no-op if it
    *  already finished or belongs to another workspace). */
   cancelRunIfRunning(workspaceId: string, runId: string): Promise<boolean> {
     return runRepo.cancelRunIfRunning(this.db, workspaceId, runId);
   }
 
-  /** On boot: any run still 'running' is orphaned (its process died / restarted),
-   *  so mark it failed. Prevents permanently stuck "running" runs in the UI. */
+  /** On boot: queued/running runs are orphaned (their process died / restarted),
+   *  so mark them failed. */
   reapStaleRunningRuns(): Promise<number> {
     return runRepo.reapStaleRunningRuns(this.db);
   }
@@ -232,6 +236,10 @@ export class ReviewRepository {
     return runRepo.createAgentRun(this.db, values);
   }
 
+  startAgentRun(runId: string): Promise<boolean> {
+    return runRepo.startAgentRun(this.db, runId);
+  }
+
   completeAgentRun(
     runId: string,
     values: {
@@ -243,6 +251,7 @@ export class ReviewRepository {
       costUsd: number | null;
       findingsCount: number;
       grounding: string;
+      groundingDropped: number;
       /** Review score (0-100); null on failed/cancelled runs. */
       score?: number | null;
       /** Findings that tripped the agent's gate; 0 on failed/cancelled runs. */

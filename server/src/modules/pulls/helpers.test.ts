@@ -28,6 +28,7 @@ function run(opts: {
   prId: string;
   multiRunId?: string | null;
   costUsd?: number | null;
+  score?: number | null;
   status?: string;
   id?: string;
 }): RunRollupRow {
@@ -36,6 +37,7 @@ function run(opts: {
     prId: opts.prId,
     multiRunId: opts.multiRunId ?? null,
     costUsd: opts.costUsd ?? null,
+    score: opts.score ?? null,
     status: opts.status ?? 'done',
   };
 }
@@ -71,6 +73,17 @@ describe('roundKeyOf', () => {
 });
 
 describe('latestRoundByPr', () => {
+  it('uses the minimum non-null score from the same latest successful round', () => {
+    const rows = [
+      run({ prId: 'pr1', multiRunId: 'm2', score: 88 }),
+      run({ prId: 'pr1', multiRunId: 'm2', score: 61 }),
+      run({ prId: 'pr1', multiRunId: 'm2', score: null }),
+      run({ prId: 'pr1', multiRunId: 'm1', score: 12 }),
+      run({ prId: 'pr1', multiRunId: 'm3', score: 1, status: 'failed' }),
+    ];
+    expect(latestRoundByPr(rows).scoreByPr.get('pr1')).toBe(61);
+  });
+
   it('sums a whole round even though its rows keep arriving after its newest run (newest-first partial sums)', () => {
     // Round m1's NEWEST run is seen first; its older sibling arrives later in
     // the newest-first stream. Picking the round before summing all of them

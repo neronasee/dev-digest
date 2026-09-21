@@ -14,7 +14,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-21 — Same-basename path rescue is safe only when candidates are first filtered by cited-line intersection and then require a unique best trailing-segment score; basename-only rewriting silently attaches findings to the wrong package in multi-package repos. (src/grounding.ts)
 
 ## What Doesn't Work
 

@@ -66,6 +66,8 @@ describe('reviewPullRequest (engine)', () => {
     // Score is derived from the SURVIVING findings, not the model's self-reported
     // 38: one CRITICAL remains after grounding ⇒ 100 − 35 = 65.
     expect(outcome.review.score).toBe(65);
+    expect(outcome.review.verdict).toBe('request_changes');
+    expect(outcome.review.summary).toContain('Hardcoded Stripe secret key');
     // progress is surfaced (server bridges this onto SSE; runner logs it)
     expect(events.some((m) => m.includes('Citation grounding'))).toBe(true);
   });
@@ -87,6 +89,27 @@ describe('reviewPullRequest (engine)', () => {
 
     expect(outcome.review.findings).toHaveLength(0);
     expect(outcome.review.score).toBe(100);
+    expect(outcome.review.verdict).toBe('approve');
+    expect(outcome.review.summary).toBe('looks good');
+  });
+
+  it('dropping every candidate produces a clean grounded approve', async () => {
+    const onlyHallucination = {
+      verdict: 'request_changes',
+      summary: 'model claims a blocker',
+      score: 0,
+      findings: [fixture.findings[1]],
+    };
+    const outcome = await reviewPullRequest({
+      systemPrompt: 'reviewer',
+      model: 'm',
+      diff: await new MockGitClient().diff(),
+      llm: new MockLLMProvider('openai', { structured: onlyHallucination }),
+      ciFailOn: 'any',
+    });
+    expect(outcome.review).toMatchObject({ verdict: 'approve', score: 100, summary: 'No grounded findings.' });
+    expect(outcome.review.findings).toEqual([]);
+    expect(outcome.groundingDropped).toBe(1);
   });
 
   it('checkCancelled throwing aborts before the LLM call', async () => {
@@ -240,6 +263,7 @@ describe('reviewPullRequest — map-reduce golden path', () => {
       llm,
       // threshold 0 → 'auto' picks map-reduce for any non-empty multi-file diff
       mapThresholdLines: 0,
+      strategy: 'auto',
       sessionId: 'sess-map-reduce',
       onEvent: (e) => events.push(e.msg),
     });
@@ -262,8 +286,8 @@ describe('reviewPullRequest — map-reduce golden path', () => {
 
     // merged (reduced) result: worst verdict, joined summaries, and grounding
     // drops the hallucinated line-50 finding before the final review
-    expect(outcome.review.verdict).toBe('request_changes');
-    expect(outcome.review.summary).toBe('auth issues db issues');
+    expect(outcome.review.verdict).toBe('comment');
+    expect(outcome.review.summary).toContain('2 grounded findings');
     expect(outcome.review.findings.map((f) => f.id)).toEqual(['auth-1', 'db-1']);
     expect(outcome.grounding).toBe('2/3 passed');
     expect(outcome.dropped).toHaveLength(1);

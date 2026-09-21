@@ -35,17 +35,16 @@ function diffWith(files: { path: string; hunks: DiffHunk[] }[]): UnifiedDiff {
   };
 }
 
-describe('FULL_FILE_KINDS exemption', () => {
+describe('all finding kinds require changed-line grounding', () => {
   const diff = diffWith([
     { path: 'src/a.ts', hunks: [hunk({ file: 'src/a.ts', newStart: 1, newLines: 2, newLineNumbers: [1, 2] })] },
   ]);
 
-  it('keeps full-file scanner kinds on file presence alone (no line intersection)', () => {
-    // line 900 intersects nothing — these kinds ground against the FILE, not a hunk
+  it('drops scanner kinds that do not cite an intersecting changed line', () => {
     for (const kind of ['secret_leak', 'lethal_trifecta', 'phantom', 'hook'] as const) {
       const r = groundFindings([mkFinding({ kind, file: 'src/a.ts', line: 900 })], diff);
-      expect(r.kept, `kind=${kind}`).toHaveLength(1);
-      expect(r.dropped, `kind=${kind}`).toHaveLength(0);
+      expect(r.kept, `kind=${kind}`).toHaveLength(0);
+      expect(r.dropped, `kind=${kind}`).toHaveLength(1);
     }
   });
 
@@ -61,6 +60,34 @@ describe('FULL_FILE_KINDS exemption', () => {
     expect(r.kept).toHaveLength(0);
     expect(r.dropped).toHaveLength(1);
     expect(r.dropped[0]!.reason).toContain("file 'other.ts' not present in diff");
+  });
+});
+
+describe('groundFindings — path rescue', () => {
+  const diff = diffWith([
+    { path: 'packages/api/src/config.ts', hunks: [hunk({ file: 'packages/api/src/config.ts', newLineNumbers: [11] })] },
+    { path: 'packages/web/src/config.ts', hunks: [hunk({ file: 'packages/web/src/config.ts', newLineNumbers: [22] })] },
+  ]);
+
+  it('normalizes separators and leading diff prefixes', () => {
+    const r = groundFindings([mkFinding({ file: '.\\b\\packages\\api\\src\\config.ts', line: 11 })], diff);
+    expect(r.kept[0]?.file).toBe('packages/api/src/config.ts');
+    expect(r.rewritten).toHaveLength(1);
+  });
+
+  it('rescues a unique same-basename candidate whose changed lines intersect', () => {
+    const r = groundFindings([mkFinding({ file: 'src/config.ts', line: 22 })], diff);
+    expect(r.kept[0]?.file).toBe('packages/web/src/config.ts');
+  });
+
+  it('drops an ambiguous basename and an invalid line', () => {
+    const ambiguous = groundFindings([mkFinding({ file: 'config.ts', line: 11 })], diffWith([
+      { path: 'a/config.ts', hunks: [hunk({ file: 'a/config.ts', newLineNumbers: [11] })] },
+      { path: 'b/config.ts', hunks: [hunk({ file: 'b/config.ts', newLineNumbers: [11] })] },
+    ]));
+    expect(ambiguous.dropped[0]?.reason).toContain('ambiguous');
+    const invalid = groundFindings([mkFinding({ file: 'packages/api/src/config.ts', line: 0 })], diff);
+    expect(invalid.dropped[0]?.reason).toContain('positive integers');
   });
 });
 
@@ -133,7 +160,7 @@ describe('groundingSummary', () => {
       diff,
     );
     expect(groundingSummary(r)).toBe('1/3 passed');
-    expect(groundingSummary({ kept: [], dropped: [] })).toBe('0/0 passed');
+    expect(groundingSummary({ kept: [], dropped: [], rewritten: [] })).toBe('0/0 passed');
   });
 });
 

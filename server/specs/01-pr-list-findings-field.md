@@ -7,7 +7,7 @@ read-only findings of the PR's **latest review round** (all agent runs sharing
 one `multi_run_id`; a run with a null `multi_run_id` is its own round). Same
 round semantics as `cost_usd`.
 
-Resolution: runs of the latest round → reviews whose `run_id` is one of those
+Resolution: successful runs of the latest round → reviews whose `run_id` is one of those
 runs → those reviews' findings, mapped to the slim `FindingPreview` shape
 (`severity`, `category`, `title`, `file`, `start_line`, `end_line`,
 `confidence`, `rationale`).
@@ -18,6 +18,9 @@ runs → those reviews' findings, mapped to the slim `FindingPreview` shape
   contract because `PrDetail` extends `PrMeta` and never populates it.
 - Include accepted/dismissed findings — the detail page renders them (muted),
   so list counts and detail cards agree.
+- Score is the minimum non-null agent score in this same latest successful
+  round. Cost is summed from it. Failed/cancelled runs and older rounds affect
+  none of score, cost, or finding previews.
 - No per-severity counts from the server — the client tallies previews
   (`countBySeverity`); the server ships records, not aggregates.
 - Bounded queries only: the route reuses the `agent_runs` rows it already

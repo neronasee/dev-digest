@@ -72,19 +72,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const container = new Container(config, db, opts.overrides);
   app.decorate('container', container);
 
-  // Reap runs left 'running' by a previous (now-dead) process — otherwise they
-  // show as perpetually "running" in the UI and can't be cancelled (no runner).
+  // Reap queued/running runs left by a previous (now-dead) process — otherwise
+  // they show as perpetually active in the UI with no executor behind them.
   //
   // AWAITED before the server accepts requests: a fresh process has no in-flight
   // runs of its own yet (runs only start via POST /review once listening), so
-  // every 'running' row here is genuinely orphaned. Awaiting also closes the
+  // every active row here is genuinely orphaned. Awaiting also closes the
   // race where a brand-new run could be created (and wrongly reaped) in the gap
   // between listening and an async reaper finishing.
   // NOTE: assumes a SINGLE API instance per DB. With multiple replicas this
   // would need per-instance scoping / heartbeats (not this app's deployment).
   try {
     const reaped = await new ReviewService(container).reapStaleRuns();
-    if (reaped > 0) app.log.info({ reaped }, 'reaped stale running agent_runs on boot');
+    if (reaped > 0) app.log.info({ reaped }, 'reaped stale active agent_runs on boot');
   } catch (err) {
     app.log.warn({ err: (err as Error).message }, 'stale-run reaping failed (non-fatal)');
   }

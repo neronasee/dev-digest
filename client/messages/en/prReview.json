@@ -48,6 +48,7 @@
     "rejected": "rejected",
     "error": "error",
     "cancelled": "cancelled",
+    "queued": "queued",
     "running": "running",
     "findings": "{count} finding(s)",
     "blockers": " · {count} blockers"

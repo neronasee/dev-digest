@@ -76,7 +76,9 @@ export function RunRow({
         )}
       </div>
       <div style={s.runSide}>
-        {r.ran_at && <span>{new Date(r.ran_at).toLocaleTimeString()}</span>}
+        {(r.status === "queued" ? r.ran_at : r.started_at ?? r.ran_at) && (
+          <span>{new Date((r.status === "queued" ? r.ran_at : r.started_at ?? r.ran_at)!).toLocaleTimeString()}</span>
+        )}
         {settled && r.tokens_in != null && (
           <span className="mono tnum">
             {t("timeline.runMeta", {
@@ -87,7 +89,7 @@ export function RunRow({
         )}
       </div>
       <MonoLink onClick={() => onOpenTrace(r.run_id)}>{t("timeline.trace")}</MonoLink>
-      {onDelete && r.status !== "running" && (
+      {onDelete && r.status !== "running" && r.status !== "queued" && (
         <IconBtn icon="Trash" label={t("timeline.deleteRun")} onClick={() => onDelete(r.run_id)} />
       )}
     </div>

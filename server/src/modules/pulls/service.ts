@@ -11,7 +11,6 @@ import { PullsRepository, type RepoRow } from './repository.js';
 import {
   findingPreviewsByPr,
   latestRoundByPr,
-  latestScoresByPr,
   toPrDetailDto,
   toPrMetaDto,
   type Logger,
@@ -69,20 +68,13 @@ export class PullsService {
 
     const rows = await this.pulls.listByRepo(repo.id);
 
-    // Latest-review SCORE per PR for the list's score ring. Computed on read
-    // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity tally is done client-side from the
-    // `findings` previews below — the server ships records, not counts.)
     const prIds = rows.map((r) => r.id);
     const reviews = this.container.reviewRepo;
-    const scoreByPr = latestScoresByPr(
-      prIds.length > 0 ? await reviews.latestReviewScores(prIds) : [],
-    );
 
     // Latest-round COST + FINDINGS per PR (round = all agent_runs sharing one
     // multi_run_id; newest successful round wins — see helpers.latestRoundByPr).
     const runRows = prIds.length > 0 ? await reviews.doneRunsForPrs(prIds) : [];
-    const { costByPr, runIdToPr } = latestRoundByPr(runRows);
+    const { costByPr, scoreByPr, runIdToPr } = latestRoundByPr(runRows);
     const reviewRefs =
       runIdToPr.size > 0 ? await reviews.reviewIdsByRunIds([...runIdToPr.keys()]) : [];
     const previewRows =

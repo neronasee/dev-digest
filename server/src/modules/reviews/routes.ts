@@ -3,6 +3,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import {
   FindingRecord,
+  ActiveRunSummary,
   ReviewRecord,
   ReviewRunResponse,
   RunRequest,
@@ -29,13 +30,6 @@ const OkResponse = z.object({ ok: z.boolean() });
 
 /** In-flight run row served by GET /pulls/:id/runs/active (no shared contract:
  *  a slim slice of RunSummary without the completion stats). */
-const ActiveRunSummary = z.object({
-  run_id: z.string(),
-  agent_id: z.string().nullable(),
-  agent_name: z.string().nullable(),
-  ran_at: z.string().nullable(),
-});
-
 /** GET /pulls/:id/reviews — persisted reviews + findings (shared ReviewRecord). */
 const ReviewsResponse = z.array(ReviewRecord);
 

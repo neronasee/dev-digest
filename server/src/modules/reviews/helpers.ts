@@ -43,6 +43,7 @@ export function reviewToDto(
   review: ReviewRow,
   findings: FindingRow[],
   agentName?: string | null,
+  run?: { grounding: string | null; groundingDropped: number | null; blockers: number | null } | null,
 ): ReviewDto {
   return {
     id: review.id,
@@ -59,6 +60,9 @@ export function reviewToDto(
     summary: review.summary,
     score: review.score,
     model: review.model,
+    grounding: run?.grounding ?? null,
+    grounding_dropped: run?.groundingDropped ?? null,
+    blockers: run?.blockers ?? null,
     created_at: review.createdAt.toISOString(),
     findings: findings.map(findingRowToDto),
   };

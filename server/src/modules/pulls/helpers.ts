@@ -70,6 +70,7 @@ export interface RunRollupRow {
   prId: string | null;
   multiRunId: string | null;
   costUsd: number | null;
+  score?: number | null;
   status: string;
 }
 
@@ -118,6 +119,8 @@ export function roundKeyOf(run: { id: string; multiRunId: string | null }): stri
 export interface LatestRoundRollup {
   /** Latest successful round's summed USD cost per PR (null when unpriced). */
   costByPr: Map<string, number | null>;
+  /** Minimum non-null agent score in that same successful round. */
+  scoreByPr: Map<string, number | null>;
   /** Every run of each PR's latest round, mapped to that PR — the join key
    *  for the round's reviews → findings. */
   runIdToPr: Map<string, string>;
@@ -161,12 +164,16 @@ export function latestRoundByPr(runs: RunRollupRow[]): LatestRoundRollup {
   }
 
   const costByPr = new Map<string, number | null>();
+  const scoreByPr = new Map<string, number | null>();
   const runIdToPr = new Map<string, string>();
   for (const [prId, roundKey] of latestRound) {
     costByPr.set(prId, roundCost.get(roundKey) ?? null);
+    const selected = done.filter((run) => roundKeyOf(run) === roundKey);
+    const scores = selected.map((run) => run.score).filter((score): score is number => score != null);
+    scoreByPr.set(prId, scores.length > 0 ? Math.min(...scores) : null);
     for (const runId of runsByRound.get(roundKey) ?? []) runIdToPr.set(runId, prId);
   }
-  return { costByPr, runIdToPr };
+  return { costByPr, scoreByPr, runIdToPr };
 }
 
 /**

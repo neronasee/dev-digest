@@ -7,7 +7,7 @@ vi.mock("@/lib/hooks/reviews", () => ({
   useDeleteReview: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock("../FindingsPanel", () => ({ FindingsPanel: () => <div>review findings</div> }));
-vi.mock("../VerdictBanner", () => ({ VerdictBanner: () => <div>review verdict</div> }));
+vi.mock("../VerdictBanner", () => ({ VerdictBanner: ({ blockers }: { blockers: number }) => <div>review verdict blockers:{blockers}</div> }));
 
 import { ReviewRunAccordion } from "./ReviewRunAccordion";
 
@@ -80,5 +80,18 @@ describe("ReviewRunAccordion timeline navigation", () => {
     );
     expect(await screen.findByText("review findings")).toBeInTheDocument();
     expect(scrollIntoViewMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses persisted gate-aware blockers and discloses grounded drops", () => {
+    render(
+      <ReviewRunAccordion
+        review={{ ...REVIEW, blockers: 2, grounding_dropped: 1 }}
+        prId="pr-1"
+        defaultOpen
+      />,
+    );
+    expect(screen.getByText(/2 blockers/)).toBeInTheDocument();
+    expect(screen.getByText("review verdict blockers:2")).toBeInTheDocument();
+    expect(screen.getByText(/1 candidate finding dropped by citation grounding/)).toBeInTheDocument();
   });
 });

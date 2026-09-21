@@ -8,4 +8,4 @@ A spec is updated in the same PR that changes the behavior it describes.
 
 | Spec | Topic |
 |------|-------|
-| —    | _none yet_ |
+| [`01-grounded-review-outcome.md`](01-grounded-review-outcome.md) | Deterministic outcome, citation rescue, and single-pass default |

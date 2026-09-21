@@ -82,6 +82,7 @@ export class ReviewRunExecutor {
             costUsd: null,
             findingsCount: 0,
             grounding: '0/0 passed',
+            groundingDropped: 0,
             error: msg,
           })
           .catch(() => undefined);
@@ -105,6 +106,10 @@ export class ReviewRunExecutor {
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
     for (const { agent, runId } of jobs) {
+      // A queued run may have been cancelled while a previous agent was using
+      // the provider. Claim it atomically; if it is no longer queued, do no
+      // enrichment or LLM work for it.
+      if (!(await this.repo.startAgentRun(runId))) continue;
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
@@ -195,6 +200,7 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        ciFailOn: agent.ciFailOn,
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -250,6 +256,7 @@ export class ReviewRunExecutor {
         costUsd,
         findingsCount: findingRows.length,
         grounding,
+        groundingDropped: outcome.groundingDropped,
         score: outcome.review.score,
         blockers,
         error: null,
@@ -271,6 +278,9 @@ export class ReviewRunExecutor {
           cost_usd: costUsd,
           findings: findingRows.length,
           grounding,
+          grounding_kept: keptFindings.length,
+          grounding_total: keptFindings.length + outcome.groundingDropped,
+          grounding_dropped: outcome.groundingDropped,
         },
         prompt_assembly: outcome.assembly,
         tool_calls: outcome.chunks.map((c) => ({
@@ -307,6 +317,7 @@ export class ReviewRunExecutor {
           costUsd: null,
           findingsCount: 0,
           grounding: '0/0 passed',
+          groundingDropped: 0,
           error: msg,
         })
         .catch(() => undefined);
@@ -426,7 +437,17 @@ export class ReviewRunExecutor {
         pr: pull.number,
         source: 'local',
       },
-      stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
+      stats: {
+        duration_ms: durationMs,
+        tokens_in: 0,
+        tokens_out: 0,
+        cost_usd: null,
+        findings: 0,
+        grounding,
+        grounding_kept: 0,
+        grounding_total: 0,
+        grounding_dropped: 0,
+      },
       prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',

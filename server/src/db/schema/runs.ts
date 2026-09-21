@@ -19,6 +19,8 @@ export const agentRuns = pgTable('agent_runs', {
     onDelete: 'set null',
   }),
   ranAt: timestamp('ran_at', { withTimezone: true }).defaultNow().notNull(),
+  /** Execution start; null while queued and on legacy rows. */
+  startedAt: timestamp('started_at', { withTimezone: true }),
   provider: text('provider'),
   model: text('model'),
   durationMs: integer('duration_ms'),
@@ -27,17 +29,20 @@ export const agentRuns = pgTable('agent_runs', {
   /** USD cost of this run (provider-reported or price-book estimate); null
    *  when the model's price is unknown or the run failed before billing. */
   costUsd: doublePrecision('cost_usd'),
-  /** Lifecycle of the run; a row is born 'running' (createAgentRun) and ends
+  /** Lifecycle of the run; a row is born 'queued', becomes 'running' when the
+   *  sequential executor claims it, and ends
    *  'done' | 'failed' | 'cancelled' (completeAgentRun/cancel). Same shape as
    *  jobs.status in ops.ts. */
-  status: text('status', { enum: ['running', 'done', 'failed', 'cancelled'] })
+  status: text('status', { enum: ['queued', 'running', 'done', 'failed', 'cancelled'] })
     .notNull()
-    .default('running'),
+    .default('queued'),
   /** Failure reason when status='failed' (LLM/API error, timeout, quota, …). */
   error: text('error'),
   source: text('source', { enum: ['local', 'ci'] }).notNull().default('local'),
   findingsCount: integer('findings_count'),
   grounding: text('grounding'),
+  /** Candidate findings rejected by citation grounding. */
+  groundingDropped: integer('grounding_dropped'),
   /** Review score (0-100) for this run; null on failed/cancelled runs. */
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
@@ -47,7 +52,7 @@ export const agentRuns = pgTable('agent_runs', {
   prStatusIdx: index('agent_runs_pr_status_idx').on(t.prId, t.status),
   // In-flight + history reads for one PR scope by workspace + pr_id.
   wsPrIdx: index('agent_runs_ws_pr_idx').on(t.workspaceId, t.prId),
-  // Boot reaper scans for status='running' orphans across all workspaces.
+  // Boot reaper scans for queued/running orphans across all workspaces.
   statusIdx: index('agent_runs_status_idx').on(t.status),
 }));
 

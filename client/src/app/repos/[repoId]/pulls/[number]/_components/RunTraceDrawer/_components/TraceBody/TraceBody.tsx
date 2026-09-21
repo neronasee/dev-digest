@@ -19,6 +19,23 @@ import { Row, Stat } from "../atoms";
 export function TraceBody({ trace, findings }: { trace: RunTrace; findings: FindingRecord[] }) {
   const t = useTranslations("runs");
   const stats = trace.stats;
+  // Old persisted traces have only the display string. Preserve truthful badge
+  // coloring by deriving counts when the new explicit fields defaulted to zero.
+  const legacyCounts = /^(\d+)\/(\d+) passed$/.exec(stats.grounding);
+  const groundingKept = stats.grounding_total === 0 && Number(legacyCounts?.[2] ?? 0) > 0
+    ? Number(legacyCounts?.[1] ?? 0)
+    : stats.grounding_kept;
+  const groundingTotal = stats.grounding_total === 0 && Number(legacyCounts?.[2] ?? 0) > 0
+    ? Number(legacyCounts?.[2] ?? 0)
+    : stats.grounding_total;
+  const groundingBadge =
+    groundingTotal === 0
+      ? { state: "neutral", color: "var(--text-muted)", bg: "var(--bg-hover)", icon: undefined }
+      : groundingKept === groundingTotal
+        ? { state: "full", color: "var(--ok)", bg: "var(--ok-bg)", icon: "Check" as const }
+        : groundingKept === 0
+          ? { state: "zero", color: "var(--crit)", bg: "var(--crit-bg)", icon: "XCircle" as const }
+          : { state: "partial", color: "var(--warn)", bg: "var(--warn-bg)", icon: "AlertTriangle" as const };
   return (
     <>
       <TraceSection icon="Settings" title={t("trace.configuration")}>
@@ -33,22 +50,18 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
               {trace.config.provider ?? "—"}
             </span>
           </Row>
-          <Row label={t("trace.config.memoryPulled")}>
+          {trace.memory_pulled.length > 0 && <Row label={t("trace.config.memoryPulled")}>
             <span>{t("trace.config.items", { count: trace.memory_pulled.length })}</span>
-          </Row>
-          <Row label={t("trace.config.specsRead")}>
+          </Row>}
+          {trace.specs_read.length > 0 && <Row label={t("trace.config.specsRead")}>
             <div style={s.specsWrap}>
-              {trace.specs_read.length === 0 ? (
-                <span style={s.specsNone}>{t("trace.config.none")}</span>
-              ) : (
-                trace.specs_read.map((sp, i) => (
+              {trace.specs_read.map((sp, i) => (
                   <span key={i} className="mono" style={s.spec}>
                     {sp}
                   </span>
-                ))
-              )}
+                ))}
             </div>
-          </Row>
+          </Row>}
         </div>
       </TraceSection>
 
@@ -56,9 +69,11 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
         icon="Gauge"
         title={t("trace.stats")}
         right={
-          <Badge color="var(--ok)" bg="var(--ok-bg)" icon="Check">
-            {stats.grounding}
-          </Badge>
+          <span data-testid="grounding-badge" data-grounding-state={groundingBadge.state}>
+            <Badge color={groundingBadge.color} bg={groundingBadge.bg} icon={groundingBadge.icon}>
+              {stats.grounding}
+            </Badge>
+          </span>
         }
       >
         <div style={s.statsRow}>

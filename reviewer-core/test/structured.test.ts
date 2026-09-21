@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import { extractJson, parseWithRepair } from '../src/llm/structured.js';
+import { OpenRouterProvider } from '../src/llm/openrouter.js';
+import { Review } from '@devdigest/shared';
 
 /**
  * Edge branches of the structured-output helpers: extractJson's fence stripping
@@ -100,5 +102,31 @@ describe('parseWithRepair', () => {
     const r = parseWithRepair(Nested, '{"inner":{"n":"x"}}');
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain('inner.n');
+  });
+});
+
+describe('structured review citation validation', () => {
+  it('rejects line 0 and reprompts before accepting a positive changed line', async () => {
+    const make = (line: number) => JSON.stringify({
+      verdict: 'comment',
+      summary: 's',
+      score: 90,
+      findings: [{
+        id: 'f1', severity: 'WARNING', category: 'bug', title: 't', file: 'src/x.ts',
+        start_line: line, end_line: line, rationale: 'r', confidence: 0.9,
+      }],
+    });
+    const create = vi.fn()
+      .mockResolvedValueOnce({ choices: [{ message: { content: make(0) } }], usage: { prompt_tokens: 1, completion_tokens: 1 } })
+      .mockResolvedValueOnce({ choices: [{ message: { content: make(1) } }], usage: { prompt_tokens: 1, completion_tokens: 1 } });
+    const provider = new OpenRouterProvider('test');
+    (provider as unknown as { client: unknown }).client = { chat: { completions: { create } } };
+
+    const result = await provider.completeStructured({
+      model: 'model', schema: Review, schemaName: 'Review', messages: [{ role: 'user', content: 'review' }], maxRetries: 1,
+    });
+    expect(result.attempts).toBe(2);
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1]![0].messages.at(-1).content).toContain('start_line');
   });
 });

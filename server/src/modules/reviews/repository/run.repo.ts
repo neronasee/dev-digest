@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { RunSummary, RunTrace } from '@devdigest/shared';
@@ -14,7 +14,7 @@ import type { AgentRunRow } from '../../../db/rows.js';
 export async function doneRunsForPrs(
   db: Db,
   prIds: string[],
-): Promise<{ id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; status: string }[]> {
+): Promise<{ id: string; prId: string | null; multiRunId: string | null; costUsd: number | null; score: number | null; status: string }[]> {
   if (prIds.length === 0) return [];
   return db
     .select({
@@ -22,6 +22,7 @@ export async function doneRunsForPrs(
       prId: t.agentRuns.prId,
       multiRunId: t.agentRuns.multiRunId,
       costUsd: t.agentRuns.costUsd,
+      score: t.agentRuns.score,
       status: t.agentRuns.status,
     })
     .from(t.agentRuns)
@@ -30,18 +31,19 @@ export async function doneRunsForPrs(
 }
 
 
-/** In-flight runs for a PR (status='running') — the server-side source of
- *  truth for "which agents are running now". Joined with the agent name. */
+/** Active queued/running runs for a PR, joined with the agent name. */
 export async function activeRunsForPull(
   db: Db,
   workspaceId: string,
   prId: string,
-): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; ran_at: string | null }[]> {
+): Promise<{ run_id: string; agent_id: string | null; agent_name: string | null; status: 'queued' | 'running'; ran_at: string | null; started_at: string | null }[]> {
   const rows = await db
     .select({
       id: t.agentRuns.id,
       agentId: t.agentRuns.agentId,
       ranAt: t.agentRuns.ranAt,
+      startedAt: t.agentRuns.startedAt,
+      status: t.agentRuns.status,
       agentName: t.agents.name,
     })
     .from(t.agentRuns)
@@ -50,14 +52,16 @@ export async function activeRunsForPull(
       and(
         eq(t.agentRuns.workspaceId, workspaceId),
         eq(t.agentRuns.prId, prId),
-        eq(t.agentRuns.status, 'running'),
+        or(eq(t.agentRuns.status, 'queued'), eq(t.agentRuns.status, 'running')),
       ),
     );
   return rows.map((r) => ({
     run_id: r.id,
     agent_id: r.agentId,
     agent_name: r.agentName ?? null,
+    status: r.status as 'queued' | 'running',
     ran_at: r.ranAt ? r.ranAt.toISOString() : null,
+    started_at: r.startedAt ? r.startedAt.toISOString() : null,
   }));
 }
 
@@ -68,12 +72,13 @@ export async function listRunsForPull(
   prId: string,
 ): Promise<RunSummary[]> {
   const rows = await db
-    .select({ run: t.agentRuns, agentName: t.agents.name })
+    .select({ run: t.agentRuns, agentName: t.agents.name, verdict: t.reviews.verdict })
     .from(t.agentRuns)
     .leftJoin(t.agents, eq(t.agents.id, t.agentRuns.agentId))
+    .leftJoin(t.reviews, eq(t.reviews.runId, t.agentRuns.id))
     .where(and(eq(t.agentRuns.workspaceId, workspaceId), eq(t.agentRuns.prId, prId)))
     .orderBy(desc(t.agentRuns.ranAt));
-  return rows.map(({ run, agentName }) => ({
+  return rows.map(({ run, agentName, verdict }) => ({
     run_id: run.id,
     agent_id: run.agentId,
     agent_name: agentName ?? null,
@@ -87,9 +92,20 @@ export async function listRunsForPull(
     cost_usd: run.costUsd,
     findings_count: run.findingsCount,
     grounding: run.grounding,
+    grounding_dropped: run.groundingDropped,
     ran_at: run.ranAt ? run.ranAt.toISOString() : null,
+    started_at: run.startedAt ? run.startedAt.toISOString() : null,
     score: run.score,
     blockers: run.blockers,
+    verdict:
+      (verdict as RunSummary['verdict']) ??
+      (run.status === 'done'
+        ? (run.blockers ?? 0) > 0
+          ? 'request_changes'
+          : (run.findingsCount ?? 0) > 0
+            ? 'comment'
+            : 'approve'
+        : null),
   }));
 }
 
@@ -135,7 +151,7 @@ export async function getRun(
   return row;
 }
 
-/** Mark a still-running run of THIS workspace as cancelled (no-op if it already
+/** Mark a queued/running run of THIS workspace as cancelled (no-op if terminal
  *  finished or belongs to another workspace — B12 tenancy scope). */
 export async function cancelRunIfRunning(
   db: Db,
@@ -149,20 +165,20 @@ export async function cancelRunIfRunning(
       and(
         eq(t.agentRuns.id, runId),
         eq(t.agentRuns.workspaceId, workspaceId),
-        eq(t.agentRuns.status, 'running'),
+        or(eq(t.agentRuns.status, 'queued'), eq(t.agentRuns.status, 'running')),
       ),
     )
     .returning({ id: t.agentRuns.id });
   return rows.length > 0;
 }
 
-/** On boot: any run still 'running' is orphaned (its process died / restarted),
- *  so mark it failed. Prevents permanently stuck "running" runs in the UI. */
+/** On boot: queued/running runs are orphaned (their process died / restarted),
+ *  so mark them failed. Prevents permanently stuck active runs in the UI. */
 export async function reapStaleRunningRuns(db: Db): Promise<number> {
   const rows = await db
     .update(t.agentRuns)
     .set({ status: 'failed' })
-    .where(eq(t.agentRuns.status, 'running'))
+    .where(or(eq(t.agentRuns.status, 'queued'), eq(t.agentRuns.status, 'running')))
     .returning({ id: t.agentRuns.id });
   return rows.length;
 }
@@ -183,7 +199,7 @@ export async function createMultiAgentRun(
   return row!.id;
 }
 
-/** Create an agent_runs row in `running` state; returns its id (= the runId). */
+/** Create an agent_runs row in `queued` state; returns its id (= the runId). */
 export async function createAgentRun(
   db: Db,
   values: {
@@ -205,11 +221,21 @@ export async function createAgentRun(
       provider: values.provider,
       model: values.model,
       multiRunId: values.multiRunId,
-      status: 'running',
+      status: 'queued',
       source: 'local',
     })
     .returning({ id: t.agentRuns.id });
   return row!.id;
+}
+
+/** Atomically claim a queued run immediately before its agent begins. */
+export async function startAgentRun(db: Db, runId: string): Promise<boolean> {
+  const rows = await db
+    .update(t.agentRuns)
+    .set({ status: 'running', startedAt: new Date() })
+    .where(and(eq(t.agentRuns.id, runId), eq(t.agentRuns.status, 'queued')))
+    .returning({ id: t.agentRuns.id });
+  return rows.length > 0;
 }
 
 export async function completeAgentRun(
@@ -224,6 +250,7 @@ export async function completeAgentRun(
     costUsd: number | null;
     findingsCount: number;
     grounding: string;
+    groundingDropped: number;
     /** Review score (0-100); null on failed/cancelled runs. */
     score?: number | null;
     /** Findings that tripped the agent's gate; 0 on failed/cancelled runs. */
@@ -242,11 +269,17 @@ export async function completeAgentRun(
       costUsd: values.costUsd,
       findingsCount: values.findingsCount,
       grounding: values.grounding,
+      groundingDropped: values.groundingDropped,
       score: values.score ?? null,
       blockers: values.blockers ?? null,
       error: values.error ?? null,
     })
-    .where(eq(t.agentRuns.id, runId));
+    .where(
+      and(
+        eq(t.agentRuns.id, runId),
+        or(eq(t.agentRuns.status, 'queued'), eq(t.agentRuns.status, 'running')),
+      ),
+    );
 }
 
 /** Persist the WHOLE run log as ONE document. PK = runId → agent_runs. */

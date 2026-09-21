@@ -20,7 +20,7 @@ const d = hasDocker ? describe : describe.skip;
  *    and onConflictDoUpdate UPDATES instead of silently adding a duplicate.
  *    The migration's dedup DELETE is replayed against a deliberately
  *    duplicated table to prove it keeps the latest row per (ws, NULL, key).
- *  - B21: agent_runs.status defaults to 'running' and rejects NULL.
+ *  - B21: agent_runs.status defaults to 'queued' and rejects NULL.
  */
 
 const PRS = 40;
@@ -321,13 +321,15 @@ d('B4+B19+B21 schema hardening (Testcontainers pg)', () => {
 
   // ---- B21: agent_runs.status hardening --------------------------------------
 
-  it('B21: agent_runs.status defaults to running and rejects NULL', async () => {
+  it('agent_runs defaults to queued, keeps legacy metadata nullable, and rejects NULL status', async () => {
     const db = pg.handle.db;
     const [run] = await db
       .insert(t.agentRuns)
       .values({ workspaceId, prId: prIds[0]! })
       .returning();
-    expect(run!.status).toBe('running');
+    expect(run!.status).toBe('queued');
+    expect(run!.startedAt).toBeNull();
+    expect(run!.groundingDropped).toBeNull();
 
     await expect(
       db.execute(sql`

@@ -61,7 +61,7 @@ export class ReviewService {
     return this.repo.deleteReview(workspaceId, reviewId);
   }
 
-  /** In-flight runs for a PR (server-side source of truth, survives reload). */
+  /** Active queued/running runs for a PR (server-side truth, survives reload). */
   async activeRuns(workspaceId: string, prId: string) {
     return this.repo.activeRunsForPull(workspaceId, prId);
   }
@@ -96,7 +96,7 @@ export class ReviewService {
     this.container.runBus.complete(runId);
   }
 
-  /** Reap runs left 'running' by a previous (now-dead) process. Called on boot. */
+  /** Reap queued/running runs left by a previous (now-dead) process. */
   async reapStaleRuns(): Promise<number> {
     return this.repo.reapStaleRunningRuns();
   }
@@ -184,8 +184,8 @@ export class ReviewService {
     const names = new Map(
       (await this.agents.namesByIds(workspaceId, agentIds)).map((a) => [a.id, a.name]),
     );
-    return rows.map(({ review, findings }) =>
-      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null),
+    return rows.map(({ review, findings, run }) =>
+      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null, run),
     );
   }
 

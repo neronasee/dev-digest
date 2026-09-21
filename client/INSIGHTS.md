@@ -14,6 +14,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-21 — Run outcome UI must consume the persisted verdict/blocker snapshot rather than re-counting mutable finding rows, otherwise dismissing a finding retroactively recolors historical timelines and accordions. (src/app/repos/[repoId]/pulls/[number]/_components/RunHistory, ReviewRunAccordion)
 - 2026-09-20 — The enforced "fetch mocked" rule: setup.ts installs a throwing default `globalThis.fetch` (error names the URL), and tests opt out per test with `vi.stubGlobal("fetch", vi.fn(...))` — the setup's global `afterEach(vi.unstubAllGlobals)` restores the thrower between tests, so a mock never leaks and a missed mock fails loudly instead of hitting localhost:3001. (src/test/setup.ts)
 
 ## What Doesn't Work

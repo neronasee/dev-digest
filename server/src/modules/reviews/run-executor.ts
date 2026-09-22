@@ -7,9 +7,6 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
-// Pure composer from the skills module (no I/O, no cycle): turns the agent's
-// linked skills into the prompt bodies + trace metadata.
-import { skillsForPrompt } from '../skills/helpers.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -197,8 +194,10 @@ export class ReviewRunExecutor {
       // a crafted payload can't skip the wrapping. Empty set → the prompt is
       // identical to the pre-skills shape (omit-when-empty, like callers/repoMap).
       const linkedSkills = await this.agents.linkedSkills(agent.id);
+      // Pure composer from the skills module (no I/O, no cycle), reached via
+      // the container seam instead of importing skills module internals.
       const { bodies: skillBodies, names: skillNames, tokens: skillTokens } =
-        skillsForPrompt(linkedSkills);
+        this.container.skillsForPrompt(linkedSkills);
       if (skillBodies.length > 0) {
         runLog.info(
           `Loaded ${skillNames.length} skill(s) (~${skillTokens} tokens): ${skillNames.join(', ')}`,

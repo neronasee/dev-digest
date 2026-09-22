@@ -84,7 +84,8 @@ export const s = {
     }) satisfies CSSProperties,
 
   // ---- drawer / forms ----
-  formBody: { display: "flex", flexDirection: "column", gap: 2 } satisfies CSSProperties,
+  // Modal bodies self-pad (the vendored Modal leaves its body wrapper unpadded).
+  formBody: { display: "flex", flexDirection: "column", gap: 2, padding: 24 } satisfies CSSProperties,
   footer: { display: "flex", justifyContent: "flex-end", gap: 10 } satisfies CSSProperties,
   badgesRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } satisfies CSSProperties,
   notice: {

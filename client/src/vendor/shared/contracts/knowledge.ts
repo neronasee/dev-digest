@@ -161,6 +161,37 @@ export const CommunitySkill = z.object({
 });
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
+/** Threat classification of an imported skill body (two-level scan). */
+export const SkillThreatLevel = z.enum(['safe', 'suspicious', 'dangerous']);
+export type SkillThreatLevel = z.infer<typeof SkillThreatLevel>;
+
+/** One level-1 regex hit — which injection pattern matched and its weight. */
+export const SkillRegexHit = z.object({
+  pattern: z.string(),
+  weight: z.number().int().positive(),
+});
+export type SkillRegexHit = z.infer<typeof SkillRegexHit>;
+
+/**
+ * Combined two-level scan verdict (regex + LLM). `llm` is null when the LLM
+ * scan degraded (no key / network / validation error) — the verdict then rests
+ * on the regex level alone. The LLM can raise the verdict, never lower it.
+ */
+export const SkillScanResult = z.object({
+  verdict: SkillThreatLevel,
+  regex: z.object({ level: SkillThreatLevel, hits: z.array(SkillRegexHit) }),
+  llm: z.object({ level: SkillThreatLevel, reason: z.string().max(200) }).nullish(),
+  reason: z.string().max(200),
+});
+export type SkillScanResult = z.infer<typeof SkillScanResult>;
+
+/** POST /skills/import-url response — fetch + scan preview only, never persisted. */
+export const SkillUrlImportPreview = z.object({
+  body: z.string(),
+  scan: SkillScanResult,
+});
+export type SkillUrlImportPreview = z.infer<typeof SkillUrlImportPreview>;
+
 // ---- Conventions ----
 export const ConventionCandidate = z.object({
   id: z.string(),

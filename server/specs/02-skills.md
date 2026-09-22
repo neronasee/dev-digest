@@ -46,6 +46,32 @@ agent's review prompt under `## Skills / rules`, in `agent_skills.order`.
    cost of the skills section per run. Both fields are nullish — old traces
    still validate.
 
+6. **URL import + two-level scan.** `POST /skills/import-url` fetches a skill
+   body SERVER-side (a browser cannot fetch cross-origin), so unlike file
+   import the fetch and its validation live behind a guarded `UrlFetcher`
+   port (`adapters/http/url-fetch.ts`: https-only, private/loopback/
+   link-local IP rejection incl. DNS resolution, ≤3 re-validated redirect
+   hops, 10 s total timeout, 1 MB streaming cap, text-ish content types).
+   The fetched body passes a two-level scan BEFORE any of it is returned to
+   the client: level 1 is a pure regex scorer (`modules/skills/scan.ts` —
+   weighted prompt-injection patterns); level 2 is an LLM classifier via
+   `container.llm('openrouter').completeStructured` on the hardcoded
+   `deepseek/deepseek-v4-flash` (body truncated to 4 000 chars, Zod schema
+   `SkillThreatScan`). The final verdict is the WORST of the two — the LLM
+   can raise, never lower — and any LLM error (no key, network, validation)
+   degrades to regex-only instead of failing the import. Gating:
+   `dangerous` → 422 `skill_threat_detected` and the body is never shipped
+   to the client; `suspicious` → 200 with the verdict surfaced in the
+   preview UI. The endpoint is a PREVIEW only — nothing is persisted;
+   creation goes through the ordinary `POST /skills` with
+   `source: 'imported_url'`, `enabled: false` (untrusted until vetted, same
+   as file imports). Scanning covers URL import only — manual creates and
+   file imports stay unscanned (future work); runtime safety still rests on
+   the composition-time `wrapUntrusted` + `INJECTION_GUARD` from decision 1:
+   the scan is an import-time gate, not a replacement. Known limitation:
+   the URL guard validates then connects (DNS-rebinding TOCTOU); the full
+   fix is a pinned-IP dispatcher, future work.
+
 ## Alternatives considered
 
 - Per-binding `enabled` column on `agent_skills`: rejected for now — the master
@@ -53,4 +79,7 @@ agent's review prompt under `## Skills / rules`, in `agent_skills.order`.
   only when an agent must keep a skill attached but inert.
 - Server-side file/zip import endpoint: rejected — import is client-side
   (extraction + preview before save), the server only receives validated JSON
-  through the same zod caps as manual creation.
+  through the same zod caps as manual creation. URL import is the deliberate
+  exception (decision 6): a browser cannot fetch cross-origin, so the fetch
+  must be server-side — which is exactly why it sits behind the guarded
+  `UrlFetcher` port instead of reusing the client-side file path.

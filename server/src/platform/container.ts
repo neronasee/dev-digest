@@ -6,6 +6,7 @@ import type {
   CodeIndex,
   Embedder,
   LLMProvider,
+  UrlFetcher,
 } from '@devdigest/shared';
 import type { AppConfig } from './config.js';
 import type { Db } from '../db/client.js';
@@ -16,6 +17,7 @@ import { LocalNoAuthProvider } from '../adapters/auth/local.js';
 import { OctokitGitHubClient } from '../adapters/github/octokit.js';
 import { SimpleGitClient } from '../adapters/git/simple-git.js';
 import { RipgrepCodeIndex } from '../adapters/codeindex/ripgrep.js';
+import { FetchUrlFetcher } from '../adapters/http/url-fetch.js';
 import { OpenAIProvider } from '../adapters/llm/openai.js';
 import { AnthropicProvider } from '../adapters/llm/anthropic.js';
 import { OpenAIEmbedder } from '../adapters/embedder/openai.js';
@@ -25,6 +27,7 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { SkillsRepository } from '../modules/skills/repository.js';
+import { skillsForPrompt } from '../modules/skills/helpers.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { PollingRepository } from '../modules/polling/repository.js';
 import { WorkspaceRepository } from '../modules/workspace/repository.js';
@@ -56,6 +59,8 @@ export interface ContainerOverrides {
   /** repo-intel T3 adapters — only the indexer pipeline reads these. */
   depgraph?: DepGraph;
   tokenizer?: Tokenizer;
+  /** Guarded https text fetch (skills URL-import preview) — no secrets. */
+  urlFetcher?: UrlFetcher;
 }
 
 export class Container {
@@ -70,6 +75,7 @@ export class Container {
   private _github?: GitHubClient;
   private _codeIndex?: CodeIndex;
   private _embedder?: Embedder;
+  private _urlFetcher?: UrlFetcher;
   private llmCache = new Map<string, LLMProvider>();
 
   // Shared repositories for cross-cutting entities (agents, reviews/pulls,
@@ -106,6 +112,18 @@ export class Container {
     return (this._skillsRepo ??= new SkillsRepository(this.db));
   }
 
+  /**
+   * Pure skills prompt composer (skills module seam): turns an agent's linked
+   * skills into prompt bodies + trace metadata. Exposed on the container so
+   * other modules (reviews' run-executor) don't import skills module internals
+   * directly — same pattern as `skillsRepo`.
+   */
+  skillsForPrompt(
+    ...args: Parameters<typeof skillsForPrompt>
+  ): ReturnType<typeof skillsForPrompt> {
+    return skillsForPrompt(...args);
+  }
+
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
   }
@@ -114,6 +132,17 @@ export class Container {
     if (this.overrides.codeIndex) return this.overrides.codeIndex;
     this._codeIndex ??= new RipgrepCodeIndex(this.git);
     return this._codeIndex;
+  }
+
+  /**
+   * Guarded https text fetcher (SSRF/size/time caps) for the skills module's
+   * import-from-URL preview. No secrets involved, so — like `git`/`codeIndex`
+   * — it resolves synchronously and lazily; tests inject a `MockUrlFetcher`.
+   */
+  get urlFetcher(): UrlFetcher {
+    if (this.overrides.urlFetcher) return this.overrides.urlFetcher;
+    this._urlFetcher ??= new FetchUrlFetcher();
+    return this._urlFetcher;
   }
 
   /**

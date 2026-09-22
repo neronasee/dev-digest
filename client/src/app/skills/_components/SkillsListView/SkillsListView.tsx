@@ -1,7 +1,7 @@
 /* /skills — Skills Lab: the card grid of skills (name, type, description,
    enabled toggle, version, agent_count, delete) with a side preview drawer on
-   card click and an Add menu (create / import). Selecting a skill's editor
-   navigates to /skills/:id. */
+   card click and an Add menu (create / import file / import URL). Selecting a
+   skill's editor navigates to /skills/:id. */
 "use client";
 
 import React from "react";
@@ -12,6 +12,7 @@ import { ConfirmModal } from "@/components/confirm-modal";
 import { useSkills, useUpdateSkill, useDeleteSkill } from "@/lib/hooks/skills";
 import { CreateSkillModal } from "./_components/CreateSkillModal";
 import { ImportSkillModal } from "./_components/ImportSkillModal";
+import { ImportFromUrlModal } from "./_components/ImportFromUrlModal";
 import { SkillPreviewDrawer } from "./_components/SkillPreviewDrawer";
 import { filterSkillsByName } from "./helpers";
 import { TYPE_COLORS } from "./constants";
@@ -24,6 +25,7 @@ export function SkillsListView() {
   const del = useDeleteSkill();
   const [creating, setCreating] = React.useState(false);
   const [importing, setImporting] = React.useState(false);
+  const [importingUrl, setImportingUrl] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [previewId, setPreviewId] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
@@ -36,6 +38,7 @@ export function SkillsListView() {
     <AppShell crumb={[{ label: t("page.crumbLab") }, { label: t("page.crumbSkills") }]}>
       {creating && <CreateSkillModal onClose={() => setCreating(false)} />}
       {importing && <ImportSkillModal onClose={() => setImporting(false)} />}
+      {importingUrl && <ImportFromUrlModal onClose={() => setImportingUrl(false)} />}
       {preview && <SkillPreviewDrawer skill={preview} onClose={() => setPreviewId(null)} />}
       {deleting && (
         <ConfirmModal
@@ -75,6 +78,7 @@ export function SkillsListView() {
             items={[
               { label: t("page.menu.createNew"), icon: "Edit", onClick: () => setCreating(true) },
               { label: t("page.menu.fromFile"), icon: "Upload", onClick: () => setImporting(true) },
+              { label: t("page.menu.fromUrl"), icon: "Globe", onClick: () => setImportingUrl(true) },
             ]}
           />
         </div>

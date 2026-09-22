@@ -307,3 +307,18 @@ export interface SecretsProvider {
    */
   set?(key: SecretKey, value: string): Promise<void>;
 }
+
+// ---------- URL fetch (skill import preview) ----------
+export interface FetchedText {
+  text: string;
+  contentType: string | null;
+  bytes: number;
+}
+
+/**
+ * Fetch a small text document over https with SSRF/size/time guards. The only
+ * consumer today is the skills module's import-from-URL preview.
+ */
+export interface UrlFetcher {
+  fetchText(url: string): Promise<FetchedText>;
+}

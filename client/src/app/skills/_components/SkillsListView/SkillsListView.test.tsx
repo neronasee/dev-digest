@@ -6,15 +6,20 @@ import type { SkillSummary } from "@devdigest/shared";
 import messages from "../../../../../messages/en/skills.json";
 import { ToastProvider } from "@/lib/toast";
 
-const { updateMutate, deleteMutate } = vi.hoisted(() => ({
+const { updateMutate, deleteMutate, importUrlMutateAsync, createMutateAsync } = vi.hoisted(() => ({
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
+  importUrlMutateAsync: vi.fn(),
+  createMutateAsync: vi.fn(),
 }));
 
 vi.mock("@/lib/hooks/skills", () => ({
   useSkills: () => ({ data: SKILLS, isLoading: false, isError: false, refetch: () => {} }),
   useUpdateSkill: () => ({ mutate: updateMutate, isPending: false }),
   useDeleteSkill: () => ({ mutate: deleteMutate, isPending: false }),
+  // The URL-import modal (really imported below) leans on these two.
+  useCreateSkill: () => ({ mutateAsync: createMutateAsync, isPending: false }),
+  useImportSkillFromUrl: () => ({ mutateAsync: importUrlMutateAsync, isPending: false }),
 }));
 
 // The list view wraps in AppShell (router/repo-context heavy) — render children.
@@ -69,6 +74,8 @@ function renderView() {
 beforeEach(() => {
   updateMutate.mockReset();
   deleteMutate.mockReset();
+  importUrlMutateAsync.mockReset();
+  createMutateAsync.mockReset();
 });
 
 describe("SkillsListView", () => {
@@ -118,5 +125,17 @@ describe("SkillsListView", () => {
     await user.type(screen.getByPlaceholderText("Search skills…"), "flake");
     expect(screen.getByText("flake-watch")).toBeInTheDocument();
     expect(screen.queryByText("breaking-change")).not.toBeInTheDocument();
+  });
+
+  it("the Add Skill menu offers create / import from file / import from URL; the URL item opens the fetch modal", async () => {
+    const user = userEvent.setup();
+    renderView();
+    await user.click(screen.getByRole("button", { name: /Add Skill/i }));
+    expect(screen.getByText("Create skill")).toBeInTheDocument();
+    expect(screen.getByText("Import from file")).toBeInTheDocument();
+    expect(screen.getByText("Import from URL")).toBeInTheDocument();
+    await user.click(screen.getByText("Import from URL"));
+    // Step 1 of the URL import modal — the URL field with its placeholder.
+    expect(screen.getByPlaceholderText("https://example.com/skills/security.md")).toBeInTheDocument();
   });
 });

@@ -75,7 +75,7 @@ flowchart TB
     agents["agents<br/>/agents · /agents/:id"]
   end
   subgraph SkillsLab["Skills Lab"]
-    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions"]
+    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions · POST /skills/import-url"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]

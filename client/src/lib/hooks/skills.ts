@@ -4,7 +4,13 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { AgentSkillLink, Skill, SkillSummary, SkillVersion } from "@devdigest/shared";
+import type {
+  AgentSkillLink,
+  Skill,
+  SkillSummary,
+  SkillUrlImportPreview,
+  SkillVersion,
+} from "@devdigest/shared";
 
 export function useSkills() {
   return useQuery({
@@ -36,6 +42,23 @@ export function useCreateSkill() {
   return useMutation({
     mutationFn: (input: CreateSkillInput) => api.post<Skill>("/skills", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+export interface ImportSkillFromUrlInput {
+  url: string;
+}
+
+/**
+ * POST /skills/import-url — server-side fetch + two-level security scan
+ * (regex + LLM) of a markdown skill body. Preview-only: nothing is persisted,
+ * so ["skills"] is NOT invalidated here — creation goes through
+ * useCreateSkill with source 'imported_url'.
+ */
+export function useImportSkillFromUrl() {
+  return useMutation({
+    mutationFn: (input: ImportSkillFromUrlInput) =>
+      api.post<SkillUrlImportPreview>("/skills/import-url", input),
   });
 }
 

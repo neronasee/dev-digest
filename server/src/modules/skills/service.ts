@@ -1,8 +1,16 @@
 import type { Container } from '../../platform/container.js';
-import type { Skill, SkillSummary, SkillVersion } from '@devdigest/shared';
+import type {
+  Skill,
+  SkillSummary,
+  SkillThreatLevel,
+  SkillUrlImportPreview,
+  SkillVersion,
+} from '@devdigest/shared';
 import { AppError } from '../../platform/errors.js';
 import type { InsertSkill, UpdateSkill } from './repository.js';
 import { toSkillDto, toSkillSummaryDto, toSkillVersionDto } from './helpers.js';
+import { MAX_SKILL_BODY_CHARS } from './constants.js';
+import { SKILL_SCAN_PROVIDER, buildScanResult, scanSkillBodyLlm, scanSkillBodyRegex } from './scan.js';
 
 /**
  * Skills service. Business logic for the Skills Lab: CRUD over `skills` with
@@ -12,7 +20,12 @@ import { toSkillDto, toSkillSummaryDto, toSkillVersionDto } from './helpers.js';
  *
  * A Skill = name + directive description (its interface) + type + markdown body
  * + source (provenance) + enabled. Skills are TEXT-ONLY configuration: nothing
- * here executes, fetches, or references anything else.
+ * here executes or references anything else. The one outbound collaborator is
+ * `previewUrlImport` — the import-from-URL preview, which fetches a candidate
+ * body through the guarded `UrlFetcher` port and two-level-scans it (scan.ts)
+ * before the API returns it to the client; a dangerous body is rejected
+ * outright, and nothing is ever persisted by the preview itself (creation goes
+ * through `create` with source 'imported_url').
  */
 
 export interface CreateSkillInput {
@@ -100,6 +113,50 @@ export class SkillsService {
     if (!found) return undefined;
     const rows = await this.container.skillsRepo.listVersions(skillId);
     return rows.map(toSkillVersionDto);
+  }
+
+  /**
+   * Import-from-URL preview: fetch the candidate body through the guarded
+   * `UrlFetcher` port, size-check it against the create-route cap, then run
+   * the two-level security scan (regex + LLM, worst-of combine). A
+   * `dangerous` verdict is a hard stop — the body is NEVER shipped to the
+   * client; the scan rides along in the error's `details` instead. `safe` and
+   * `suspicious` return the body plus the verdict for a human to review.
+   * Nothing is persisted here — creation goes through `create` with source
+   * 'imported_url' and `enabled: false`.
+   */
+  async previewUrlImport(url: string): Promise<SkillUrlImportPreview> {
+    const fetched = await this.container.urlFetcher.fetchText(url);
+    if (fetched.text.length > MAX_SKILL_BODY_CHARS) {
+      throw new AppError(
+        'skill_body_too_large',
+        `Fetched body exceeds ${MAX_SKILL_BODY_CHARS} characters`,
+        422,
+      );
+    }
+    const regex = scanSkillBodyRegex(fetched.text);
+    const llm = await this.scanWithLlm(fetched.text);
+    const scan = buildScanResult(regex, llm);
+    if (scan.verdict === 'dangerous') {
+      throw new AppError('skill_threat_detected', scan.reason, 422, { scan });
+    }
+    return { body: fetched.text, scan };
+  }
+
+  /**
+   * Level-2 scan through the openrouter provider slot. NEVER lets an LLM
+   * infrastructure failure block or crash the preview: a missing key, network
+   * error, or provider throw degrades to `null` — the verdict then rests on
+   * the regex level alone (see scan.ts).
+   */
+  private async scanWithLlm(
+    body: string,
+  ): Promise<{ level: SkillThreatLevel; reason: string } | null> {
+    try {
+      return await scanSkillBodyLlm(await this.container.llm(SKILL_SCAN_PROVIDER), body);
+    } catch {
+      return null; // no key / network / provider error — regex-only, never throw
+    }
   }
 
   /** Reject a duplicate skill name within the workspace with a stable 409. */

@@ -77,8 +77,11 @@ describe("ConventionCard", () => {
 
   it("offers the three triage actions: Accept, Reject and Edit", () => {
     renderCard();
-    expect(screen.getByRole("button", { name: "Accept" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    // Accessible names come from the aria-labels (they keep the card's toggles
+    // distinguishable from the Pending/Accepted/Rejected filter chips); the
+    // visible labels are asserted by the accept/reject tests below.
+    expect(screen.getByRole("button", { name: "Accept candidate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject candidate" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 

@@ -149,6 +149,9 @@ export function ConventionCard({
           icon="Check"
           disabled={busy}
           onClick={() => onStatus(candidate.status === "accepted" ? "pending" : "accepted")}
+          aria-label={
+            candidate.status === "accepted" ? t("card.acceptedAria") : t("card.acceptAria")
+          }
         >
           {candidate.status === "accepted" ? t("card.accepted") : t("card.accept")}
         </Button>
@@ -158,6 +161,9 @@ export function ConventionCard({
           icon="X"
           disabled={busy}
           onClick={() => onStatus(candidate.status === "rejected" ? "pending" : "rejected")}
+          aria-label={
+            candidate.status === "rejected" ? t("card.rejectedAria") : t("card.rejectAria")
+          }
         >
           {candidate.status === "rejected" ? t("card.rejected") : t("card.reject")}
         </Button>

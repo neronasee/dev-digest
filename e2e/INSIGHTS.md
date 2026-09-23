@@ -43,6 +43,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-23 — In the browser-flow CI job, install `reviewer-core` with `npm ci` before `server` runs `db:seed`: Skills Lab seeding imports raw reviewer-core source, so installing its dependencies only before API startup fails the seed with `ERR_MODULE_NOT_FOUND` for `openai`. (.github/workflows/e2e-web.yml)
 - 2026-09-20 — "web never became reachable on :3100" with a wall of `GET / 500` lines means the CLIENT failed to compile — the real error is the `⨯ Module not found` block in the web log ABOVE the 500 spam, not a stack/port problem; reproduce fast with `cd client && pnpm build` (webpack — same resolver as `next dev`), NOT `pnpm test` (vitest resolves `.js`→`.ts` imports natively, so the unit lanes stay green while the app is broken); clearing `client/.next` does not fix real resolution errors. (scripts/e2e.sh:160, client/next.config.mjs)
 
 ## Session Notes

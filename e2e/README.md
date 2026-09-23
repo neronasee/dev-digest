@@ -25,15 +25,21 @@ A spec lives in `specs/NN-name.flow.json`:
 
 - `{BASE}` is replaced with `E2E_BASE_URL` (default `http://localhost:3000`).
 - Each `cmd` is passed verbatim to `agent-browser`. A non-zero exit fails the
-  step and the flow — so `wait --text` / `wait --url` **are** the assertions
-  (they time out and exit non-zero if the condition never holds).
+  step and the flow — so `wait --text` / `wait --url` / `wait --fn` **are** the
+  assertions (they time out and exit non-zero if the condition never holds;
+  `--fn` polls a JavaScript expression in the page until it evaluates truthy —
+  use it when one assertion must check two things at once, or to perform a
+  guarded UI action that coordinate clicks can't do reliably, e.g. clicking a
+  below-the-fold toggle whose collapse keeps the asserted text out of the DOM).
 - Optional `"assert": { "stdoutIncludes": "…" }` adds a substring check on the
   command's stdout.
-- Locators are deterministic only (`--url`, `--text`, `find role|text|label`).
-  We never use the AI `chat` command, so runs are stable and key-free.
+- Locators are deterministic only (`--url`, `--text`, `--fn`,
+  `find role|text|label`). We never use the AI `chat` command, so runs are
+  stable and key-free.
 - Every spec is validated at load time against `FlowSchema`
   (`lib/assert.ts`), which models this grammar: a typo'd key, unknown
-  command, condition-less `wait`, or stray `{…}` placeholder fails immediately
+  command, condition-less `wait`, or stray `{…}` placeholder (outside a
+  `--fn` expression) fails immediately
   with the spec's filename — before any browser command runs.
 
 Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
@@ -112,4 +118,4 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `10-skills-page` | `/skills` → SKILLS LAB nav section → seeded skill cards incl. flake-watch's Imported provenance |
 | `11-skill-detail` | `/skills` → card click opens the side-drawer preview → 'Open full editor' → `/skills/:id` Config/Preview/Versioning tabs |
 | `12-agent-skills-tab` | `/agents` → API Contract Reviewer → Skills tab → order caption, filter field, four bound skills (read-only) |
-| `13-run-trace-skills` | PR #483 → Agent runs → Trace drawer → Prompt assembly shows the Skills block (seeded demo run) |
+| `13-run-trace-skills` | PR #483 → Agent runs → Trace drawer → Prompt assembly shows the Skills block AND its `~N tokens` label, asserted together via `wait --fn` (seeded demo run) |

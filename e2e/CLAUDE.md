@@ -21,15 +21,15 @@ your dev DB.
 
 ## Where things lie
 
-- `specs/NN-name.flow.json` — the flows; `wait --text` / `wait --url` are the
-  assertions (non-zero exit on timeout).
+- `specs/NN-name.flow.json` — the flows; `wait --text` / `wait --url` /
+  `wait --fn` are the assertions (non-zero exit on timeout).
 - `run.ts` — runner: `{BASE}` substitution, ordered commands, optional
   `stdoutIncludes` checks.
 - `lib/assert.ts` — assertion helpers.
 
 ## Hard rules
 
-- Locators are deterministic only (`--url`, `--text`, `find role|text|label`) —
+- Locators are deterministic only (`--url`, `--text`, `--fn`, `find role|text|label`) —
   never the AI `chat` command.
 - Flows target read-only seeded data (`acme/payments-api`, PR #482) — nothing may
   trigger a model call or mutate state.

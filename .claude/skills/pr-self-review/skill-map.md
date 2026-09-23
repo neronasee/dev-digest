@@ -45,7 +45,7 @@ classification is additive per file.
 | `e2e/run.ts`, `e2e/agent-browser.json` | none | e2e: typecheck (npm test only if hermetic stack is up) |
 | `**/tsconfig.json`, `**/*.d.ts` | typescript-expert | owning package: typecheck |
 | `docs/**`, `*/README.md`, `*/docs/**`, `*/specs/**/*.md`, `TESTING.md`, `designs/**` | none | convention sanity only (SUGGESTION-level) |
-| `CLAUDE.md`, `*/CLAUDE.md`, `.claude/skills/**` | none | CLAUDE.md link-not-duplicate rule (SUGGESTION-level) |
+| `AGENTS.md`, `*/AGENTS.md`, `CLAUDE.md`, `*/CLAUDE.md`, `.claude/skills/**` | none | AGENTS.md link-not-duplicate rule; CLAUDE.md paths are compat symlinks to AGENTS.md (SUGGESTION-level) |
 | `scripts/*.sh`, `docker-compose.yml`, `.github/**` | none | none — note CI edits visibly in the report |
 
 ### Security activation rule (supplements every row)
@@ -60,7 +60,7 @@ UI-styling hunks.
 
 ## Table B — per-package mechanical checks
 
-Run from inside the package directory (commands per the root `CLAUDE.md`).
+Run from inside the package directory (commands per the root `AGENTS.md`).
 Failure mapping is uniform: **exit ≠ 0 → one CRITICAL finding** (category
 `bug`, confidence 1.0, source `mechanical:<command>`); depcruise exiting 0 with
 a warning that names a changed file → one WARNING.

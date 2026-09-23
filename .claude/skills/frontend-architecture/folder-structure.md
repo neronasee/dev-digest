@@ -102,7 +102,7 @@ Add files only as they appear — a simple view may be just
 | CSS classes | kebab-case | `review-card` |
 | Tests | `<Name>.test.tsx`, colocated | `AgentCard.test.tsx` |
 
-When generic guidance conflicts with repo conventions (CLAUDE.md,
+When generic guidance conflicts with repo conventions (AGENTS.md,
 `client/README.md`), repo conventions win.
 
 ## Anti-patterns

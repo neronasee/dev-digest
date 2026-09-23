@@ -9,8 +9,8 @@ enforce it.
   (pure domain core).
 - **Out of scope:** `client/` frontend → `frontend-architecture` /
   `react-best-practices`.
-- **Grounded in:** `server/CLAUDE.md`, `server/README.md`,
-  `server/INSIGHTS.md`, `reviewer-core/CLAUDE.md`,
+- **Grounded in:** `server/AGENTS.md`, `server/README.md`,
+  `server/INSIGHTS.md`, `reviewer-core/AGENTS.md`,
   `server/src/platform/container.ts`,
   `server/src/vendor/shared/adapters.ts`, `server/tsconfig.json`.
 

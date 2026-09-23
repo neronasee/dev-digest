@@ -2,6 +2,7 @@ import type { Container } from '../../platform/container.js';
 import type {
   Agent,
   AgentSkillLink,
+  AgentSummary,
   AgentVersion,
   CiFailOn,
   ModelInfo,
@@ -57,9 +58,10 @@ export class AgentsService {
     this.repo = new AgentsRepository(container.db);
   }
 
-  async list(workspaceId: string): Promise<Agent[]> {
+  /** List with each agent's linked-skill count (GET /agents → AgentSummary[]). */
+  async list(workspaceId: string): Promise<AgentSummary[]> {
     const rows = await this.repo.list(workspaceId);
-    return rows.map(toAgentDto);
+    return rows.map((row) => ({ ...toAgentDto(row), skill_count: row.skillCount }));
   }
 
   async get(workspaceId: string, id: string): Promise<Agent | undefined> {

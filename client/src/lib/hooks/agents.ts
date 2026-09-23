@@ -3,12 +3,12 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { Agent, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
+import type { Agent, AgentSummary, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
 
 export function useAgents() {
   return useQuery({
     queryKey: ["agents"],
-    queryFn: () => api.get<Agent[]>("/agents"),
+    queryFn: () => api.get<AgentSummary[]>("/agents"),
   });
 }
 

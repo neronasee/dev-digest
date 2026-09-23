@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
@@ -51,8 +51,20 @@ export interface LinkedSkillRow {
 export class AgentsRepository {
   constructor(private db: Db) {}
 
-  async list(workspaceId: string): Promise<AgentRow[]> {
-    return this.db.select().from(t.agents).where(eq(t.agents.workspaceId, workspaceId));
+  /**
+   * All agents of the workspace, each joined with the number of skills linked
+   * to it (LEFT JOIN + COUNT over agent_skills, grouped in Postgres — no N+1).
+   * Mirrors SkillsRepository.list's agent_count. Agents with no links read as
+   * 0 (leftJoin keeps them).
+   */
+  async list(workspaceId: string): Promise<(AgentRow & { skillCount: number })[]> {
+    const rows = await this.db
+      .select({ agent: t.agents, skillCount: count(t.agentSkills.skillId) })
+      .from(t.agents)
+      .leftJoin(t.agentSkills, eq(t.agentSkills.agentId, t.agents.id))
+      .where(eq(t.agents.workspaceId, workspaceId))
+      .groupBy(t.agents.id);
+    return rows.map((r) => ({ ...r.agent, skillCount: r.skillCount }));
   }
 
   async listEnabled(workspaceId: string): Promise<AgentRow[]> {

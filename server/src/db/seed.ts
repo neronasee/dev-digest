@@ -450,6 +450,78 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     }
   }
 
+  // ---- Conventions Extractor: one candidate per triage state ----
+  // Deterministic board for the page, component tests and the e2e flow —
+  // no model call needed to see accept/reject/edit working. Keyed on
+  // (repo, rule) so re-seeding is a no-op.
+  const seedConventions: Array<{
+    category: 'naming' | 'structure' | 'errors' | 'testing' | 'imports' | 'typing' | 'api' | 'general';
+    rule: string;
+    rationale: string | null;
+    evidencePath: string;
+    evidenceLine: number;
+    evidenceSnippet: string;
+    confidence: number;
+    occurrences: number;
+    status: 'pending' | 'accepted' | 'rejected';
+  }> = [
+    {
+      category: 'errors',
+      rule: 'Throw NotFoundError for a missing row instead of returning null',
+      rationale: 'Callers skip null checks; a typed error surfaces the miss in CI instead of at runtime.',
+      evidencePath: 'src/api/users.ts',
+      evidenceLine: 3,
+      evidenceSnippet: 'const user = await db.users.find(id);\nif (!user) throw new NotFoundError(`user ${id}`);',
+      confidence: 0.9,
+      occurrences: 4,
+      status: 'pending',
+    },
+    {
+      category: 'structure',
+      rule: 'Never mix .then() chains with await in new code',
+      rationale: 'The codebase is fully async/await; a .then() chain hides control flow a reviewer cannot follow.',
+      evidencePath: 'src/middleware/ratelimit.ts',
+      evidenceLine: 12,
+      evidenceSnippet: 'const bucket = await store.take(key);\nreturn { allowed: bucket.remaining > 0 };',
+      confidence: 0.85,
+      occurrences: 9,
+      status: 'accepted',
+    },
+    {
+      category: 'structure',
+      rule: 'Prefer default exports for modules',
+      rationale: null,
+      evidencePath: 'src/config.ts',
+      evidenceLine: 1,
+      evidenceSnippet: 'export const config = loadConfig(process.env);',
+      confidence: 0.55,
+      occurrences: 1,
+      status: 'rejected',
+    },
+  ];
+  for (const c of seedConventions) {
+    const [existing] = await db
+      .select({ id: t.conventions.id })
+      .from(t.conventions)
+      .where(
+        and(eq(t.conventions.workspaceId, workspaceId), eq(t.conventions.repoId, repoId), eq(t.conventions.rule, c.rule)),
+      );
+    if (existing) continue;
+    await db.insert(t.conventions).values({
+      workspaceId,
+      repoId,
+      category: c.category,
+      rule: c.rule,
+      rationale: c.rationale ?? null,
+      evidencePath: c.evidencePath,
+      evidenceLine: c.evidenceLine,
+      evidenceSnippet: c.evidenceSnippet,
+      confidence: c.confidence,
+      occurrences: c.occurrences,
+      status: c.status,
+    });
+  }
+
   // ---- experiment PRs (#483, #484) — Skills control experiments ----
   // pr_files carry REAL patch hunks (PR #482's files don't — its diff is
   // empty), so the reviewer sees actual code and the grounding gate accepts

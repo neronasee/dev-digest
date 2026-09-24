@@ -14,6 +14,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-22 — A static `vi.mock` of a data hook CANNOT observe what a mutation's onSuccess does to the real query cache (conventions' `useExtractConventions` seeds `["conventions", repoId]` from its response) — tests asserting post-mutation UI (e.g. Run scan swapping to Re-scan once a board exists) must set the mocked hook's data variable to the post-mutation state and re-render, not click and hope. (src/app/repos/[repoId]/conventions/page.test.tsx)
 - 2026-09-21 — Run outcome UI must consume the persisted verdict/blocker snapshot rather than re-counting mutable finding rows, otherwise dismissing a finding retroactively recolors historical timelines and accordions. (src/app/repos/[repoId]/pulls/[number]/_components/RunHistory, ReviewRunAccordion)
 - 2026-09-21 — Build zip fixtures IN MEMORY for jsdom tests with fflate's `zipSync` and parse them with `unzipSync` — no binary fixture files, no FileReader mocking, and the ignore-non-markdown rule is directly assertable by zipping a `.sh` alongside the `.md`. (src/app/skills/_components/SkillsListView/_components/ImportSkillModal/helpers.test.ts)
 - 2026-09-20 — The enforced "fetch mocked" rule: setup.ts installs a throwing default `globalThis.fetch` (error names the URL), and tests opt out per test with `vi.stubGlobal("fetch", vi.fn(...))` — the setup's global `afterEach(vi.unstubAllGlobals)` restores the thrower between tests, so a mock never leaks and a missed mock fails loudly instead of hitting localhost:3001. (src/test/setup.ts)

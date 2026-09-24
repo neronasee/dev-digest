@@ -1,0 +1,298 @@
+{
+  "name": "Conventions board: seeded candidates, reject persistence, skill creation",
+  "description": "Open the Conventions page from the SKILLS LAB sidebar and confirm the seeded candidate board renders (pending card with rule, evidence path:line, confidence %, and the code-counted matching-files figure). Exercise the triage flow over seeded data only — the scan buttons are NEVER clicked, so no model call happens: open the Create-skill modal (server draft merges the one accepted convention) and cancel; reject the pending candidate and prove the decision survives a reload under the All filter; then create the repo-conventions skill through the modal and confirm it lands on the Skills page. Locator notes: sidebar navigation uses find text (role link does not resolve NavItem's nested icon+label anchor); buttons use role+name with three disambiguations: the card's triage toggles carry aria-labels (Accept/Reject candidate) so they cannot substring-collide with the Pending1/Accepted1/Rejected1/All3 filter chips (concatenated chip names — the severity-pill convention), the modal's plain Create submit renders before the toolbar's Create skill in DOM order, and the default Pending filter shows exactly one Reject button. MUTATES seeded data (one reject, one skill create) — needs the hermetic runner's fresh DB; a second run against the same stack would 409 on the duplicate skill name.",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/"
+      ],
+      "label": "load the app root"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls"
+      ],
+      "label": "root redirects to the seeded repo's PR list"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "repo context resolves — sidebar hrefs carry the real repo id"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "Conventions",
+        "click"
+      ],
+      "label": "open Conventions from the SKILLS LAB sidebar section (text locator — role link does not resolve NavItem's nested icon+label structure)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/conventions"
+      ],
+      "label": "conventions route reached"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Conventions in"
+      ],
+      "label": "page heading renders with the repo name"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Throw NotFoundError for a missing row instead of returning null"
+      ],
+      "label": "seeded pending candidate card renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "src/api/users.ts:3"
+      ],
+      "label": "card shows the evidence file:line"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "90%"
+      ],
+      "label": "card shows the confidence percentage"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "4 matching files"
+      ],
+      "label": "card shows the code-counted occurrence figure"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Create skill"
+      ],
+      "label": "Create skill action is present — one candidate is already accepted"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Create skill"
+      ],
+      "label": "open the create-skill modal"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Create skill from conventions"
+      ],
+      "label": "modal title explains what is being created"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Merged from"
+      ],
+      "label": "modal banner explains the merge from accepted conventions"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "repo-conventions"
+      ],
+      "label": "server draft arrived — the prefilled skill name renders"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Cancel"
+      ],
+      "label": "abandon the modal without saving"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Reject candidate"
+      ],
+      "label": "reject the seeded pending candidate (aria-label — the plain name collides with the Rejected filter chip)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Nothing here"
+      ],
+      "label": "the rejected card leaves the default Pending view"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "All3"
+      ],
+      "label": "switch to the All filter"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Throw NotFoundError for a missing row instead of returning null"
+      ],
+      "label": "the rejected card is still on the board"
+    },
+    {
+      "cmd": [
+        "open",
+        "{BASE}/"
+      ],
+      "label": "reload the app — decisions must persist"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls"
+      ],
+      "label": "root redirect after reload"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "repo context resolves again"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "Conventions",
+        "click"
+      ],
+      "label": "reopen Conventions (text locator)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Nothing here"
+      ],
+      "label": "fresh mount settles — and the default Pending view is empty after the reload (the rejection held)"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "All3"
+      ],
+      "label": "switch to the All filter (concatenated chip name — the severity-pill convention)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Throw NotFoundError for a missing row instead of returning null"
+      ],
+      "label": "the rejection SURVIVED the reload — the rule is gone from pending for good"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Create skill"
+      ],
+      "label": "open the create-skill modal again"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "repo-conventions"
+      ],
+      "label": "draft loads from the still-accepted convention"
+    },
+    {
+      "cmd": [
+        "find",
+        "role",
+        "button",
+        "click",
+        "--name",
+        "Create"
+      ],
+      "label": "submit — create the skill and link it to the preselected agent"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/skills/"
+      ],
+      "label": "modal redirects to the new skill's editor"
+    },
+    {
+      "cmd": [
+        "open",
+        "{BASE}/skills"
+      ],
+      "label": "open the Skills page (static route)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "skills list settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "repo-conventions"
+      ],
+      "label": "the new skill is visible in the Skills Lab list"
+    }
+  ]
+}

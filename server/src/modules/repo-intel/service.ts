@@ -647,6 +647,25 @@ export class RepoIntelService implements RepoIntel {
   }
 
   /**
+   * Top-N TEST files by rank (tests only; declaration files, mocks, fixtures,
+   * migrations and configs stay dropped). The conventions extractor reads both
+   * samples: source conventions from `getConventionSamples`, testing
+   * conventions from here.
+   */
+  async getTestSamples(repoId: string, n: number): Promise<string[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    if (n <= 0) return [];
+    const rows = await this.repo.getRankedPaths(repoId, Math.max(n * 10, 100));
+    const out: string[] = [];
+    for (const r of rows) {
+      if (!isTestPath(r.path)) continue;
+      out.push(r.path);
+      if (out.length >= n) break;
+    }
+    return out;
+  }
+
+  /**
    * Top-N file paths by rank DESC, dropping tests/configs/migrations and any
    * caller-supplied `exclude` substrings. Over-fetches by 10× before filtering
    * so the post-filter still yields N where possible.
@@ -724,15 +743,20 @@ const CRITICAL_PATH_ROOTS = 5;
  * Path kinds excluded from rank-driven file samples (conventions/onboarding):
  * tests, configs, declaration files, migrations, generated dirs. Substring
  * match on the repo-relative path (kept deliberately simple + deterministic).
+ * Split into TEST vs non-test junk so `getTestSamples` can keep the former
+ * while still dropping the latter.
  */
-const JUNK_PATH_PATTERNS = [
+const TEST_PATH_PATTERNS = [
   '.test.',
   '.spec.',
-  '.d.ts',
   '__tests__/',
-  '__mocks__/',
   '/test/',
   '/tests/',
+] as const;
+
+const NON_TEST_JUNK_PATTERNS = [
+  '.d.ts',
+  '__mocks__/',
   '/migrations/',
   '/__fixtures__/',
   '.config.',
@@ -742,9 +766,20 @@ const JUNK_PATH_PATTERNS = [
   'prettier',
 ] as const;
 
+const JUNK_PATH_PATTERNS = [...TEST_PATH_PATTERNS, ...NON_TEST_JUNK_PATTERNS] as const;
+
 function isJunkPath(path: string): boolean {
   const lower = path.toLowerCase();
   return JUNK_PATH_PATTERNS.some((p) => lower.includes(p));
+}
+
+/** A test file worth sampling (test pattern, none of the other junk). */
+function isTestPath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return (
+    TEST_PATH_PATTERNS.some((p) => lower.includes(p)) &&
+    !NON_TEST_JUNK_PATTERNS.some((p) => lower.includes(p))
+  );
 }
 
 /** Enclosing top-level (bare-name) symbol for a line, from persistent rows. */

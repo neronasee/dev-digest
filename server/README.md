@@ -76,6 +76,7 @@ flowchart TB
   end
   subgraph SkillsLab["Skills Lab"]
     skills["skills<br/>/skills · /skills/:id · /skills/:id/versions · POST /skills/import-url"]
+    conventions["conventions<br/>/repos/:id/conventions · /repos/:id/conventions/(extract|skill)<br/>PATCH/DELETE /conventions/:id"]
   end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]

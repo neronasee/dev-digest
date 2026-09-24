@@ -34,7 +34,8 @@
       "memoryPulled": "Memory pulled",
       "specsRead": "Specs read",
       "items": "{count, plural, one {# item} other {# items}}",
-      "none": "none"
+      "none": "none",
+      "skillsLoaded": "Skills loaded"
     },
     "stat": {
       "duration": "DURATION",
@@ -53,7 +54,8 @@
       "copy": "Copy",
       "fullscreen": "Open fullscreen",
       "search": "Search in this block…",
-      "noMatches": "No matches for “{q}”."
+      "noMatches": "No matches for “{q}”.",
+      "tokens": "~{count} tokens"
     },
     "tools": {
       "args": "args",

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   Agent,
   AgentSkillLink,
+  AgentSummary,
   AgentVersion,
   CiFailOn,
   ModelInfo,
@@ -92,7 +93,7 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
 
   app.get(
     '/agents',
-    { schema: { response: { 200: z.array(Agent) } } },
+    { schema: { response: { 200: z.array(AgentSummary) } } },
     async (req) => {
       const { workspaceId } = await getContext(app.container, req);
       return service.list(workspaceId);

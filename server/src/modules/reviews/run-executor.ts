@@ -188,6 +188,22 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // Skills Lab — the agent's linked markdown instruction blocks. Composed
+      // SERVER-side: enabled skills only, in agent_skills order; non-manual
+      // (imported/extracted/community) bodies are wrapped untrusted here, where
+      // a crafted payload can't skip the wrapping. Empty set → the prompt is
+      // identical to the pre-skills shape (omit-when-empty, like callers/repoMap).
+      const linkedSkills = await this.agents.linkedSkills(agent.id);
+      // Pure composer from the skills module (no I/O, no cycle), reached via
+      // the container seam instead of importing skills module internals.
+      const { bodies: skillBodies, names: skillNames, tokens: skillTokens } =
+        this.container.skillsForPrompt(linkedSkills);
+      if (skillBodies.length > 0) {
+        runLog.info(
+          `Loaded ${skillNames.length} skill(s) (~${skillTokens} tokens): ${skillNames.join(', ')}`,
+        );
+      }
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -206,6 +222,9 @@ export class ReviewRunExecutor {
         ...(callersDigest ? { callers: callersDigest } : {}),
         // T3 — repo skeleton, same omit-when-empty contract.
         ...(repoMap ? { repoMap } : {}),
+        // Skills Lab — linked skill bodies in binding order; assemblePrompt
+        // renders the `## Skills / rules` section and records it in the trace.
+        ...(skillBodies.length > 0 ? { skills: skillBodies } : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -282,7 +301,14 @@ export class ReviewRunExecutor {
           grounding_total: keptFindings.length + outcome.groundingDropped,
           grounding_dropped: outcome.groundingDropped,
         },
-        prompt_assembly: outcome.assembly,
+        prompt_assembly: {
+          ...outcome.assembly,
+          // Per-block token attribution for the skills section (the UI shows
+          // "~N tokens" next to the block) + which skills made it in, in order.
+          ...(skillBodies.length > 0
+            ? { skills_tokens: skillTokens, skills_loaded: skillNames }
+            : {}),
+        },
         tool_calls: outcome.chunks.map((c) => ({
           tool: 'review_file',
           args: c.label,

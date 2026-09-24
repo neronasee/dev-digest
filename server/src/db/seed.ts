@@ -6,7 +6,26 @@ import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
   PERFORMANCE_REVIEWER_PROMPT,
+  TEST_QUALITY_REVIEWER_PROMPT,
+  API_CONTRACT_REVIEWER_PROMPT,
 } from './seed-prompts.js';
+import {
+  BRANCH_COVERAGE_SKILL,
+  CORNER_CASES_SKILL,
+  MOCKING_DISCIPLINE_SKILL,
+  FLAKE_WATCH_SKILL,
+  BREAKING_CHANGE_SKILL,
+  RESPONSE_SCHEMA_SKILL,
+  SEMVER_DISCIPLINE_SKILL,
+  DEPRECATION_POLICY_SKILL,
+} from './seed-skills.js';
+import {
+  REFUND_SOURCE_PATCH,
+  REFUND_TEST_PATCH,
+  ROUTE_SIGNATURE_PATCH,
+} from './seed-diffs.js';
+import { wrapUntrusted } from '@devdigest/reviewer-core';
+import { skillsForPrompt } from '../modules/skills/helpers.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -18,11 +37,16 @@ const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
  *
  * Seeds: default workspace + system user + membership, default settings,
  * demo repo (acme/payments-api), PR #482 with files/commits, a sample review
- * with a few findings, and the three built-in agents (General + Security +
- * Performance), all on the default openrouter/deepseek-v4-flash provider+model.
+ * with a few findings, and the built-in agents (General + Security +
+ * Performance + Test Quality + API Contract), all on the default
+ * openrouter/deepseek-v4-flash provider+model.
  *
- * Course lessons populate the other tables (skills, conventions, memory, eval,
- * …) once their features are built — they start empty here.
+ * Skills Lab: eight seeded skills (descriptions are directive interfaces; the
+ * four API-contract ones carry good/bad examples) bound to the two new agents;
+ * `flake-watch` keeps its `imported_file` provenance (vetted at seed time).
+ * Experiment PRs #483/#484 ship real patch hunks for the Skills control
+ * experiments, and PR #483 gets one 'seed'-model run whose trace shows the
+ * assembled skills block (no model call needed to inspect it).
  */
 
 export const DEFAULT_WORKSPACE_NAME = 'default';
@@ -175,7 +199,7 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     ]);
   }
 
-  // ---- built-in agents (the three starter presets) ----
+  // ---- built-in agents (the starter presets) ----
   // Prompt bodies live in ./seed-prompts.ts (mirrored in docs/agent-prompts/*.md).
   const seedAgents: Array<typeof t.agents.$inferInsert> = [
     {
@@ -207,6 +231,30 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       provider: DEFAULT_PROVIDER,
       model: DEFAULT_MODEL,
       systemPrompt: PERFORMANCE_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
+      name: 'Test Quality Reviewer',
+      description:
+        'Flags uncovered branches, missed corner cases, excessive mocking, and flaky tests.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: TEST_QUALITY_REVIEWER_PROMPT,
+      enabled: true,
+      version: 1,
+      createdBy: userId,
+    },
+    {
+      workspaceId,
+      name: 'API Contract Reviewer',
+      description:
+        'Flags breaking API-surface changes, response-schema drift, semver misses, and missing deprecation windows.',
+      provider: DEFAULT_PROVIDER,
+      model: DEFAULT_MODEL,
+      systemPrompt: API_CONTRACT_REVIEWER_PROMPT,
       enabled: true,
       version: 1,
       createdBy: userId,
@@ -260,6 +308,349 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       })
       .returning();
     await db.update(t.reviews).set({ runId: run!.id }).where(eq(t.reviews.id, seedReview.id));
+  }
+
+  // ---- Skills Lab: seeded skills (descriptions are directive interfaces) ----
+  // Bodies live in ./seed-skills.ts. flake-watch keeps source 'imported_file'
+  // (vetted at seed time; provenance preserved) so the studio shows a real
+  // "Imported" origin; user-driven imports land disabled until vetted instead.
+  const seedSkills: Array<{
+    name: string;
+    type: 'rubric' | 'convention';
+    source: 'manual' | 'imported_file';
+    description: string;
+    body: string;
+    enabled: boolean;
+  }> = [
+    {
+      name: 'breaking-change',
+      type: 'convention',
+      source: 'manual',
+      description:
+        'Flag any change to public API surface that breaks an existing caller — method, path, params, or response shape.',
+      body: BREAKING_CHANGE_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'response-schema',
+      type: 'convention',
+      source: 'manual',
+      description:
+        'Flag response bodies that diverge from the documented schema — removed, renamed, or retyped fields.',
+      body: RESPONSE_SCHEMA_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'semver-discipline',
+      type: 'convention',
+      source: 'manual',
+      description:
+        'Require a version action matching the change type: major for breaking, minor for additive, patch for fixes.',
+      body: SEMVER_DISCIPLINE_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'deprecation-policy',
+      type: 'convention',
+      source: 'manual',
+      description:
+        'Require a deprecation window (alias, changelog note, sunset version) for any removed or renamed public surface.',
+      body: DEPRECATION_POLICY_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'branch-coverage',
+      type: 'rubric',
+      source: 'manual',
+      description:
+        'Enumerate the branches of changed code and flag every branch no test in this PR drives through.',
+      body: BRANCH_COVERAGE_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'corner-cases',
+      type: 'rubric',
+      source: 'manual',
+      description:
+        'Check the PR tests against the boundary/empty/null/error-path input matrix and flag every uncovered case.',
+      body: CORNER_CASES_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'mocking-discipline',
+      type: 'convention',
+      source: 'manual',
+      description:
+        'Flag tests that mock the unit under test, stub owned types, or fake I/O in integration tests.',
+      body: MOCKING_DISCIPLINE_SKILL,
+      enabled: true,
+    },
+    {
+      name: 'flake-watch',
+      type: 'convention',
+      source: 'imported_file',
+      description:
+        'Flag time, randomness, ordering, and real-network dependencies that make tests flake in CI.',
+      body: FLAKE_WATCH_SKILL,
+      enabled: true,
+    },
+  ];
+  const skillIdsByName = new Map<string, string>();
+  for (const s of seedSkills) {
+    let [row] = await db
+      .select()
+      .from(t.skills)
+      .where(and(eq(t.skills.workspaceId, workspaceId), eq(t.skills.name, s.name)));
+    if (!row) {
+      [row] = await db
+        .insert(t.skills)
+        .values({
+          workspaceId,
+          name: s.name,
+          description: s.description,
+          type: s.type,
+          source: s.source,
+          body: s.body,
+          enabled: s.enabled,
+          version: 1,
+        })
+        .returning();
+      // Mirror the API invariant: a skill always has its v1 history entry.
+      await db
+        .insert(t.skillVersions)
+        .values({ skillId: row!.id, version: 1, body: s.body });
+    }
+    skillIdsByName.set(s.name, row!.id);
+  }
+
+  // ---- bind the seeded skills to the new agents (order = prompt order) ----
+  const bindings: Array<{ agent: string; skills: string[] }> = [
+    {
+      agent: 'Test Quality Reviewer',
+      skills: ['branch-coverage', 'corner-cases', 'mocking-discipline', 'flake-watch'],
+    },
+    {
+      agent: 'API Contract Reviewer',
+      skills: ['breaking-change', 'response-schema', 'semver-discipline', 'deprecation-policy'],
+    },
+  ];
+  for (const { agent: agentName, skills: skillNames } of bindings) {
+    const [agent] = await db
+      .select()
+      .from(t.agents)
+      .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, agentName)));
+    if (!agent) continue;
+    for (const [i, skillName] of skillNames.entries()) {
+      const skillId = skillIdsByName.get(skillName);
+      if (!skillId) continue;
+      await db
+        .insert(t.agentSkills)
+        .values({ agentId: agent.id, skillId, order: i })
+        .onConflictDoNothing();
+    }
+  }
+
+  // ---- experiment PRs (#483, #484) — Skills control experiments ----
+  // pr_files carry REAL patch hunks (PR #482's files don't — its diff is
+  // empty), so the reviewer sees actual code and the grounding gate accepts
+  // line citations inside the hunks.
+  const experimentPrs: Array<{
+    number: number;
+    title: string;
+    author: string;
+    branch: string;
+    headSha: string;
+    additions: number;
+    deletions: number;
+    filesCount: number;
+    body: string;
+    commitMessage: string;
+    files: Array<{ path: string; additions: number; deletions: number; patch: string }>;
+  }> = [
+    {
+      number: 483,
+      title: 'Add refund endpoint with happy-path test',
+      author: 'dev.dashboard',
+      branch: 'feat/refund-endpoint',
+      headSha: 'b2c3d4e5f6a1',
+      additions: 39,
+      deletions: 0,
+      filesCount: 2,
+      body: 'Adds refundPayment plus a unit test for the success path.',
+      commitMessage: 'Add refund endpoint with tests',
+      files: [
+        { path: 'src/payments/refund.ts', additions: 25, deletions: 0, patch: REFUND_SOURCE_PATCH },
+        { path: 'src/payments/refund.test.ts', additions: 14, deletions: 0, patch: REFUND_TEST_PATCH },
+      ],
+    },
+    {
+      number: 484,
+      title: 'Change GET /users query params and response shape',
+      author: 'dev.dashboard',
+      branch: 'feat/users-list-shape',
+      headSha: 'c3d4e5f6a1b2',
+      additions: 4,
+      deletions: 5,
+      filesCount: 1,
+      body: 'Renames the profile query param, adjusts the default page size, and clarifies the response field naming.',
+      commitMessage: 'Adjust users list params and response naming',
+      files: [
+        { path: 'src/api/users.ts', additions: 4, deletions: 5, patch: ROUTE_SIGNATURE_PATCH },
+      ],
+    },
+  ];
+  for (const ep of experimentPrs) {
+    const [existing] = await db
+      .select()
+      .from(t.pullRequests)
+      .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, ep.number)));
+    if (existing) continue;
+    const [newPr] = await db
+      .insert(t.pullRequests)
+      .values({
+        workspaceId,
+        repoId,
+        number: ep.number,
+        title: ep.title,
+        author: ep.author,
+        branch: ep.branch,
+        base: 'main',
+        headSha: ep.headSha,
+        additions: ep.additions,
+        deletions: ep.deletions,
+        filesCount: ep.filesCount,
+        status: 'needs_review',
+        body: ep.body,
+      })
+      .returning();
+    await db.insert(t.prFiles).values(
+      ep.files.map((f) => ({
+        prId: newPr!.id,
+        path: f.path,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch,
+      })),
+    );
+    await db.insert(t.prCommits).values({
+      prId: newPr!.id,
+      sha: ep.headSha,
+      message: ep.commitMessage,
+      author: ep.author,
+    });
+  }
+
+  // ---- seeded demo run for Test Quality Reviewer on PR #483 ----
+  // A 'seed'-model run whose trace shows the assembled skills block (bodies,
+  // per-block token estimate, loaded names, log line) — so the Run Trace UI
+  // and e2e can verify skills observability without a model call. Idempotent
+  // via the 'seed' model marker on the PR's runs.
+  const [pr483] = await db
+    .select()
+    .from(t.pullRequests)
+    .where(and(eq(t.pullRequests.repoId, repoId), eq(t.pullRequests.number, 483)));
+  const [tqAgent] = await db
+    .select()
+    .from(t.agents)
+    .where(
+      and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.name, 'Test Quality Reviewer')),
+    );
+  if (pr483 && tqAgent) {
+    const [existingRun] = await db
+      .select()
+      .from(t.agentRuns)
+      .where(and(eq(t.agentRuns.prId, pr483.id), eq(t.agentRuns.model, 'seed')));
+    if (!existingRun) {
+      const links = (
+        await db
+          .select({ skill: t.skills, order: t.agentSkills.order })
+          .from(t.agentSkills)
+          .innerJoin(t.skills, eq(t.agentSkills.skillId, t.skills.id))
+          .where(eq(t.agentSkills.agentId, tqAgent.id))
+      ).map((r) => ({ skill: r.skill, order: r.order }));
+      const { bodies, names, tokens } = skillsForPrompt(links);
+      const diffText = experimentPrs
+        .find((e) => e.number === 483)!
+        .files.map((f) => `--- a/${f.path}\n+++ b/${f.path}\n${f.patch}`)
+        .join('\n');
+      const taskLine = `Review the changes in PR #483 "${pr483.title}".`;
+      const user = [
+        taskLine,
+        `## PR description\n${wrapUntrusted('pr-description', pr483.body ?? '')}`,
+        ...(bodies.length > 0 ? [`## Skills / rules\n${bodies.join('\n\n')}`] : []),
+        `## Diff to review\n${wrapUntrusted('diff', diffText)}`,
+      ].join('\n\n');
+      const [multiRun] = await db
+        .insert(t.multiAgentRuns)
+        .values({ workspaceId, prId: pr483.id })
+        .returning();
+      const [run] = await db
+        .insert(t.agentRuns)
+        .values({
+          workspaceId,
+          agentId: tqAgent.id,
+          prId: pr483.id,
+          multiRunId: multiRun!.id,
+          provider: 'seed',
+          model: 'seed',
+          status: 'done',
+          durationMs: 0,
+          tokensIn: 0,
+          tokensOut: 0,
+          costUsd: null,
+          findingsCount: 0,
+          grounding: '0/0 passed',
+          score: null,
+          blockers: 0,
+        })
+        .returning();
+      await db.insert(t.runTraces).values({
+        runId: run!.id,
+        trace: {
+          config: {
+            agent: tqAgent.name,
+            version: String(tqAgent.version),
+            provider: 'seed',
+            model: 'seed',
+            pr: 483,
+            source: 'local',
+          },
+          stats: {
+            duration_ms: 0,
+            tokens_in: 0,
+            tokens_out: 0,
+            cost_usd: null,
+            findings: 0,
+            grounding: '0/0 passed',
+          },
+          prompt_assembly: {
+            system: tqAgent.systemPrompt,
+            skills: bodies.length > 0 ? bodies.join('\n\n') : null,
+            ...(bodies.length > 0 ? { skills_tokens: tokens, skills_loaded: names } : {}),
+            memory: null,
+            specs: null,
+            user,
+          },
+          tool_calls: [],
+          raw_output: '',
+          memory_pulled: [],
+          specs_read: [],
+          log: [
+            { t: '00.00', kind: 'info', msg: `Starting review with agent "Test Quality Reviewer" (seed/seed)` },
+            ...(bodies.length > 0
+              ? [
+                  {
+                    t: '00.01',
+                    kind: 'info' as const,
+                    msg: `Loaded ${names.length} skill(s) (~${tokens} tokens): ${names.join(', ')}`,
+                  },
+                ]
+              : []),
+            { t: '00.02', kind: 'info', msg: 'Run complete; trace persisted' },
+          ],
+        },
+      });
+    }
   }
 
   return { workspaceId, userId };

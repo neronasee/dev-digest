@@ -1,0 +1,13 @@
+{
+  "name": "Skills Lab page lists the seeded skills",
+  "description": "Open /skills from the sidebar and confirm the SKILLS LAB section, the page heading, and the seeded skill cards render. The seeded set includes the four API-contract skills (breaking-change, response-schema, semver-discipline, deprecation-policy), the test-quality set, and flake-watch — whose card shows the imported provenance. Locators use DOM casing for skill names (mono, not CSS-uppercased) and the source-uppercase 'SKILLS LAB' nav section. Read-only.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/skills"], "label": "load the Skills Lab page" },
+    { "cmd": ["wait", "--url", "/skills"], "label": "skills route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skills fetch settles" },
+    { "cmd": ["wait", "--text", "SKILLS LAB"], "label": "sidebar shows the SKILLS LAB section (source-uppercase)" },
+    { "cmd": ["wait", "--text", "breaking-change"], "label": "seeded breaking-change card renders" },
+    { "cmd": ["wait", "--text", "flake-watch"], "label": "seeded flake-watch card renders" },
+    { "cmd": ["wait", "--text", "Imported"], "label": "the imported skill's provenance label renders" }
+  ]
+}

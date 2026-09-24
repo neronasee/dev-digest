@@ -50,6 +50,19 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
               {trace.config.provider ?? "—"}
             </span>
           </Row>
+          <Row label={t("trace.config.skillsLoaded")}>
+            <div style={s.specsWrap}>
+              {(trace.prompt_assembly.skills_loaded ?? []).length === 0 ? (
+                <span style={s.specsNone}>{t("trace.config.none")}</span>
+              ) : (
+                trace.prompt_assembly.skills_loaded!.map((name, i) => (
+                  <span key={i} className="mono" style={s.spec}>
+                    {name}
+                  </span>
+                ))
+              )}
+            </div>
+          </Row>
           {trace.memory_pulled.length > 0 && <Row label={t("trace.config.memoryPulled")}>
             <span>{t("trace.config.items", { count: trace.memory_pulled.length })}</span>
           </Row>}
@@ -89,7 +102,12 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
       <TraceSection icon="FileText" title={t("trace.promptAssembly")} defaultOpen={false}>
         <PromptBlock label={t("trace.prompt.system")} text={trace.prompt_assembly.system} color={PROMPT_COLORS.system} />
         {trace.prompt_assembly.skills != null && (
-          <PromptBlock label={t("trace.prompt.skills")} text={trace.prompt_assembly.skills} color={PROMPT_COLORS.skills} />
+          <PromptBlock
+            label={t("trace.prompt.skills")}
+            text={trace.prompt_assembly.skills}
+            color={PROMPT_COLORS.skills}
+            tokens={trace.prompt_assembly.skills_tokens ?? undefined}
+          />
         )}
         {trace.prompt_assembly.memory != null && (
           <PromptBlock label={t("trace.prompt.memory")} text={trace.prompt_assembly.memory} color={PROMPT_COLORS.memory} />

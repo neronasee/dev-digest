@@ -6,8 +6,11 @@ import type { RunTrace } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/runs.json"; // apps/web/messages/en/runs.json
 
 // Mock the trace hooks so the drawer renders without a query client / SSE.
-// `box` lets individual tests swap the served trace (see the grounding tests).
+// `box` lets individual tests swap the served trace (see the skills block tests).
 const box = vi.hoisted(() => ({ current: undefined as RunTrace | undefined }));
+vi.mock("@/lib/hooks/trace", () => ({
+  useRunTrace: () => ({ data: box.current, isLoading: false }),
+}));
 
 const TRACE: RunTrace = {
   config: { agent: "Security", version: "1", provider: "openai", model: "gpt-4.1", pr: 482, source: "local" },
@@ -24,9 +27,6 @@ const TRACE: RunTrace = {
 };
 
 box.current = TRACE;
-vi.mock("@/lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: box.current, isLoading: false }),
-}));
 vi.mock("@/lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
 }));
@@ -64,6 +64,39 @@ describe("A5 Run Trace drawer (smoke)", () => {
     await user.click(screen.getByText("log"));
     // LiveLogStream renders its filter input
     expect(screen.getByPlaceholderText("Filter log…")).toBeInTheDocument();
+  });
+});
+
+describe("RunTraceDrawer — skills block observability", () => {
+  afterEach(() => {
+    box.current = TRACE;
+  });
+
+  it("shows the per-block token count next to the skills block and the loaded skill names", async () => {
+    const user = userEvent.setup();
+    box.current = {
+      ...TRACE,
+      prompt_assembly: {
+        ...TRACE.prompt_assembly,
+        skills: "## branch-coverage\nEnumerate branches.",
+        skills_tokens: 421,
+        skills_loaded: ["branch-coverage", "corner-cases"],
+      },
+    };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Test Quality" prNumber={483} onClose={() => {}} />);
+    // "Skills loaded" lives in the (open-by-default) Configuration section.
+    expect(screen.getByText("Skills loaded")).toBeInTheDocument();
+    expect(screen.getByText("branch-coverage")).toBeInTheDocument();
+    expect(screen.getByText("corner-cases")).toBeInTheDocument();
+    // The token count sits on the skills PromptBlock — expand Prompt assembly.
+    await user.click(screen.getByText("Prompt assembly"));
+    expect(screen.getByText("~421 tokens")).toBeInTheDocument();
+  });
+
+  it("renders no token count and 'none' for loaded skills when the trace has none", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
+    expect(screen.getByText("Skills loaded")).toBeInTheDocument();
   });
 });
 

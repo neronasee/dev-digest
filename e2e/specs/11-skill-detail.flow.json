@@ -1,0 +1,17 @@
+{
+  "name": "Card click opens the side preview; the detail page renders Config/Preview/Versioning tabs",
+  "description": "From /skills, click the seeded breaking-change card: the preview opens in a SIDE DRAWER (right panel) showing the skill's body — not a modal and not a navigation. Then follow 'Open full editor' into /skills/:id and confirm exactly the three detail tabs (Config, Preview, Versioning) render. Tab labels are DOM-cased (no CSS text-transform on the Tabs kit), so wait --text uses that casing. Read-only.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/skills"], "label": "load the Skills Lab page" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skills fetch settles" },
+    { "cmd": ["find", "text", "breaking-change", "click"], "label": "click the breaking-change card" },
+    { "cmd": ["wait", "--text", "Breaking-change gate"], "label": "side preview shows the rendered markdown body (drawer, not navigation)" },
+    { "cmd": ["wait", "--url", "/skills"], "label": "still on the list route — the preview is an overlay, not a page" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Open full editor"], "label": "follow the drawer footer into the skill editor" },
+    { "cmd": ["wait", "--url", "/skills/"], "label": "skill detail route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skill fetch settles" },
+    { "cmd": ["wait", "--text", "Config"], "label": "Config tab renders" },
+    { "cmd": ["wait", "--text", "Preview"], "label": "Preview tab renders" },
+    { "cmd": ["wait", "--text", "Versioning"], "label": "Versioning tab renders" }
+  ]
+}

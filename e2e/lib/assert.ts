@@ -22,14 +22,18 @@ const KNOWN_COMMANDS = ["open", "wait", "find", "screenshot", "close"] as const;
 /**
  * `wait` conditions that make it do something. README: `wait --text` /
  * `wait --url` "are" the assertions; `--load networkidle` waits for data to
- * settle. A condition-less `wait` asserts nothing — reject it.
+ * settle; `--fn <expression>` polls a JavaScript expression in the page until
+ * it evaluates truthy — the escape hatch when one assertion must check two
+ * strings at once (e.g. a block title AND its token-count label). A
+ * condition-less `wait` asserts nothing — reject it.
  */
-const WAIT_CONDITIONS = ["--load", "--url", "--text"] as const;
+const WAIT_CONDITIONS = ["--load", "--url", "--text", "--fn"] as const;
 
 /** Locator kinds allowed after `find` (README: `find role|text|label`). */
 const FIND_BY = ["role", "text", "label"] as const;
 
-/** `{BASE}` is the only placeholder the runner substitutes — no other braces belong in a command. */
+/** `{BASE}` is the only placeholder the runner substitutes — no other braces
+ * belong in a command, except inside a `--fn` expression (real JavaScript). */
 function strayBraceIssue(arg: string): string | null {
   const stripped = arg.replaceAll("{BASE}", "");
   if (!stripped.includes("{") && !stripped.includes("}")) return null;
@@ -42,6 +46,9 @@ const CmdSchema = z
   .min(1)
   .superRefine((cmd, ctx) => {
     cmd.forEach((arg, i) => {
+      // The token after `--fn` is a JS expression — its braces are code,
+      // not stray `{BASE}` placeholders.
+      if (cmd[i - 1] === "--fn") return;
       const issue = strayBraceIssue(arg);
       if (issue) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [i], message: issue });
     });

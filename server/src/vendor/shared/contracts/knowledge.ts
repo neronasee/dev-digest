@@ -115,7 +115,13 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+export const SkillSource = z.enum([
+  'manual',
+  'imported_url',
+  'imported_file',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -131,6 +137,21 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+/** A skill plus the number of agents it is linked to (Skills page cards). */
+export const SkillSummary = Skill.extend({
+  agent_count: z.number().int(),
+});
+export type SkillSummary = z.infer<typeof SkillSummary>;
+
+/** One immutable entry in a skill's version history (skill_versions row). */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int().positive(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
 export const CommunitySkill = z.object({
   name: z.string(),
   repo: z.string(),
@@ -139,6 +160,37 @@ export const CommunitySkill = z.object({
   desc: z.string(),
 });
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
+
+/** Threat classification of an imported skill body (two-level scan). */
+export const SkillThreatLevel = z.enum(['safe', 'suspicious', 'dangerous']);
+export type SkillThreatLevel = z.infer<typeof SkillThreatLevel>;
+
+/** One level-1 regex hit — which injection pattern matched and its weight. */
+export const SkillRegexHit = z.object({
+  pattern: z.string(),
+  weight: z.number().int().positive(),
+});
+export type SkillRegexHit = z.infer<typeof SkillRegexHit>;
+
+/**
+ * Combined two-level scan verdict (regex + LLM). `llm` is null when the LLM
+ * scan degraded (no key / network / validation error) — the verdict then rests
+ * on the regex level alone. The LLM can raise the verdict, never lower it.
+ */
+export const SkillScanResult = z.object({
+  verdict: SkillThreatLevel,
+  regex: z.object({ level: SkillThreatLevel, hits: z.array(SkillRegexHit) }),
+  llm: z.object({ level: SkillThreatLevel, reason: z.string().max(200) }).nullish(),
+  reason: z.string().max(200),
+});
+export type SkillScanResult = z.infer<typeof SkillScanResult>;
+
+/** POST /skills/import-url response — fetch + scan preview only, never persisted. */
+export const SkillUrlImportPreview = z.object({
+  body: z.string(),
+  scan: SkillScanResult,
+});
+export type SkillUrlImportPreview = z.infer<typeof SkillUrlImportPreview>;
 
 // ---- Conventions ----
 export const ConventionCandidate = z.object({
@@ -190,6 +242,12 @@ export const Agent = z.object({
   repo_intel: z.boolean().default(true),
 });
 export type Agent = z.infer<typeof Agent>;
+
+/** An agent plus the number of skills linked to it (Agents page cards). */
+export const AgentSummary = Agent.extend({
+  skill_count: z.number().int(),
+});
+export type AgentSummary = z.infer<typeof AgentSummary>;
 
 export const AgentSkillLink = z.object({
   agent_id: z.string(),

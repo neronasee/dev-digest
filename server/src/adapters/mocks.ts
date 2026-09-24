@@ -31,6 +31,8 @@ import type {
   AuthWorkspace,
   SecretsProvider,
   SecretKey,
+  UrlFetcher,
+  FetchedText,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
 
@@ -56,11 +58,11 @@ export interface MockLLMOptions {
 }
 
 export class MockLLMProvider implements LLMProvider {
-  readonly id: 'openai' | 'anthropic';
+  readonly id: 'openai' | 'anthropic' | 'openrouter';
   public calls: { method: string; req: unknown }[] = [];
 
   constructor(
-    id: 'openai' | 'anthropic' = 'openai',
+    id: 'openai' | 'anthropic' | 'openrouter' = 'openai',
     private opts: MockLLMOptions = {},
   ) {
     this.id = id;
@@ -115,6 +117,32 @@ export class MockEmbedder implements Embedder {
   readonly dims = 1536;
   async embed(texts: string[]): Promise<number[][]> {
     return texts.map((_, i) => new Array(1536).fill(0).map((_, j) => (i + j) % 2));
+  }
+}
+
+// ---------- Mock URL fetcher ----------
+export interface MockUrlFetcherOptions {
+  /** Body text returned by fetchText (default: a small mock skill). */
+  text?: string;
+  /** Content-type reported alongside the text (default: text/markdown). */
+  contentType?: string | null;
+  /** When set, fetchText throws this instead of returning a body. */
+  error?: Error;
+}
+
+export class MockUrlFetcher implements UrlFetcher {
+  /** Every URL handed to fetchText, in call order. */
+  public fetched: string[] = [];
+
+  constructor(private opts: MockUrlFetcherOptions = {}) {}
+
+  async fetchText(url: string): Promise<FetchedText> {
+    this.fetched.push(url);
+    if (this.opts.error) throw this.opts.error;
+    const text = this.opts.text ?? '# Mock skill\n\nRule text.';
+    const contentType =
+      this.opts.contentType === undefined ? 'text/markdown; charset=utf-8' : this.opts.contentType;
+    return { text, contentType, bytes: Buffer.byteLength(text) };
   }
 }
 

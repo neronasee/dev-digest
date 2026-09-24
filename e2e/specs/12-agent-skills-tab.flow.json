@@ -1,0 +1,16 @@
+{
+  "name": "Agent editor exposes exactly Config + Skills tabs; Skills tab lists all skills with the order caption",
+  "description": "Open the seeded API Contract Reviewer, confirm the editor now has a Skills tab, switch to it, and confirm the tab surfaces: the order-matters caption, the bound-count badge (4 of 8), the search field, and the four bound skills (breaking-change, response-schema, semver-discipline, deprecation-policy) with their numbered drag handles. Read-only: no drag, no toggle, no rebind (dnd and toggles are covered by component tests; the browser flow pins the visible contract). Tab label and caption are DOM-cased; never locate on Badge content (CSS-uppercased).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "agents fetch settles" },
+    { "cmd": ["find", "text", "API Contract Reviewer", "click"], "label": "open the seeded API Contract Reviewer" },
+    { "cmd": ["wait", "--url", "tab=config"], "label": "editor route reached with Config active" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Skills"], "label": "switch to the Skills tab" },
+    { "cmd": ["wait", "--url", "tab=skills"], "label": "Skills tab active in the URL" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skills fetch settles" },
+    { "cmd": ["wait", "--text", "Order matters — earlier skills appear earlier in the assembled prompt."], "label": "the order caption renders" },
+    { "cmd": ["wait", "--text", "breaking-change"], "label": "bound skill breaking-change is listed" },
+    { "cmd": ["wait", "--text", "deprecation-policy"], "label": "bound skill deprecation-policy is listed" }
+  ]
+}

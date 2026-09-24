@@ -49,7 +49,11 @@ warn() { printf '\033[1;33m! %s\033[0m\n' "$*"; }
 command -v docker >/dev/null || { echo "docker not found"; exit 1; }
 command -v pnpm   >/dev/null || { echo "pnpm not found (npm i -g pnpm)"; exit 1; }
 command -v agent-browser >/dev/null || \
-  warn "agent-browser not found — install once: npm i -g agent-browser && agent-browser install"
+  warn "agent-browser not found — install once: npm i -g agent-browser@0.27 && agent-browser install"
+# Echoed every run: agent-browser locator behavior is version-sensitive (0.27's
+# `wait --text` matches CSS-uppercased text — e2e/INSIGHTS.md), so a flaky run
+# must be diagnosable from the log alone. e2e/README.md pins the version.
+command -v agent-browser >/dev/null && log "$(agent-browser --version 2>/dev/null || echo 'agent-browser (version unknown — broken install?)')"
 
 # --- teardown trap (installed before we start anything) ----------------------
 SERVER_PID=""
@@ -84,11 +88,14 @@ trap cleanup EXIT INT TERM
 # --- fresh isolated Postgres (ephemeral: --rm, no named volume) --------------
 log "starting isolated Postgres '$PG_CONTAINER' on :$PG_PORT (ephemeral)"
 docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
+# Published on loopback only: a bare -p binds every interface, exposing a
+# known-credentials Postgres to the LAN for the lifetime of the run. The URL
+# above already dials 127.0.0.1, so nothing else changes.
 docker run -d --rm --name "$PG_CONTAINER" \
   -e POSTGRES_USER="$PG_USER" \
   -e POSTGRES_PASSWORD="$PG_PASS" \
   -e POSTGRES_DB="$PG_DB" \
-  -p "${PG_PORT}:5432" \
+  -p "127.0.0.1:${PG_PORT}:5432" \
   --health-cmd="pg_isready -U $PG_USER -d $PG_DB" \
   --health-interval=5s --health-timeout=5s --health-retries=10 \
   "$PG_IMAGE" >/dev/null

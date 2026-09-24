@@ -1,6 +1,10 @@
 import type { Agent, AgentVersion, CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
 import { AgentVersionConfig } from '@devdigest/shared';
-import type { AgentRow, AgentVersionRow } from './repository.js';
+// Row types come from db/rows (B14), NOT from ./repository — the repository
+// imports isConfigChange from here, so a repository import would re-create the
+// helpers ↔ repository import cycle.
+import type { AgentRow, AgentVersionRow } from '../../db/rows.js';
+import { AppError } from '../../platform/errors.js';
 
 /**
  * Pure helpers for the agents module — DB row ⇄ DTO mapping and the
@@ -30,13 +34,24 @@ export function toAgentDto(row: AgentRow): Agent {
  * Map a persisted `agent_versions` row to the public `AgentVersion` DTO. The
  * stored `config_json` is untyped jsonb (a snapshot from an older config shape
  * could drift), so it is parsed through `AgentVersionConfig` — a malformed
- * snapshot throws here rather than leaking an unvalidated blob to the client.
+ * snapshot becomes an `invalid_agent_version` AppError (500: corrupt STORED
+ * data, not a client mistake) rather than a raw ZodError, which Fastify would
+ * misreport as a 422 "Request validation failed" (B23).
  */
 export function toAgentVersionDto(row: AgentVersionRow): AgentVersion {
+  const parsed = AgentVersionConfig.safeParse(row.configJson);
+  if (!parsed.success) {
+    throw new AppError(
+      'invalid_agent_version',
+      `Corrupt config snapshot for agent ${row.agentId} v${row.version}`,
+      500,
+      parsed.error.issues,
+    );
+  }
   return {
     agent_id: row.agentId,
     version: row.version,
-    config: AgentVersionConfig.parse(row.configJson),
+    config: parsed.data,
     created_at: row.createdAt.toISOString(),
   };
 }

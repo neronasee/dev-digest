@@ -10,7 +10,7 @@ import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, Verdict } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
-import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
+import { useDeleteReview } from "@/lib/hooks/reviews";
 
 const VERDICT_COLOR: Record<string, string> = {
   request_changes: "var(--crit)",
@@ -30,30 +30,29 @@ export function ReviewRunAccordion({
   repoFullName,
   headSha,
   targetRunId = null,
-  targetNonce = 0,
+  targetRequest = 0,
 }: {
   review: ReviewRecord;
   prId: string;
   defaultOpen?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
-  /** When this matches review.run_id, the accordion opens and scrolls into view
-   *  (driven from the Timeline: clicking an agent name navigates here). */
+  /** A timeline navigation request opens this run before scrolling to it. */
   targetRunId?: string | null;
-  targetNonce?: number;
+  targetRequest?: number;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
-    if (review.run_id && review.run_id === targetRunId) {
-      setOpen(true);
-      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetRunId, targetNonce, review.run_id]);
+    if (!review.run_id || review.run_id !== targetRunId) return;
+    setOpen(true);
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [review.run_id, targetRunId, targetRequest]);
   const del = useDeleteReview(prId);
   const findings = review.findings;
-  const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
+  // Historical run outcome is immutable: finding actions never rewrite the
+  // gate-aware blocker count captured when the run completed.
+  const blockers = review.blockers ?? 0;
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
 
   return (
@@ -145,6 +144,11 @@ export function ReviewRunAccordion({
                 blockers={blockers}
                 agentName={review.agent_name}
               />
+            </div>
+          )}
+          {(review.grounding_dropped ?? 0) > 0 && (
+            <div role="note" style={{ margin: "-4px 0 14px", color: "var(--warn)", fontSize: 12.5 }}>
+              {review.grounding_dropped} candidate finding{review.grounding_dropped === 1 ? "" : "s"} dropped by citation grounding
             </div>
           )}
           <FindingsPanel

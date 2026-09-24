@@ -1,0 +1,14 @@
+{
+  "name": "Agent editor opens the seeded agent's Config tab",
+  "description": "From /agents, click the seeded Security Reviewer card and confirm the editor route renders its Config tab. The card click is router.push to /agents/:id?tab=config, so waiting for 'tab=config' pins both the route and the active tab in one deterministic check. The Config tab surfaces the 'Configuration' h2 and the 'System prompt' field label — neither is CSS-uppercased, so wait --text uses the DOM casing (only the editor header's provider/model Badge is uppercased; it is never used as a locator). The click target is in view: the three seeded cards sit at the top of the page. Read-only: no save, no enable toggle, no delete — nothing mutates the agent and no model call happens.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--url", "/agents"], "label": "agents route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "agents fetch settles" },
+    { "cmd": ["find", "text", "Security Reviewer", "click"], "label": "open the seeded Security Reviewer card" },
+    { "cmd": ["wait", "--url", "tab=config"], "label": "editor route reached with the Config tab active" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "agent detail fetch settles" },
+    { "cmd": ["wait", "--text", "Configuration"], "label": "Config tab heading renders" },
+    { "cmd": ["wait", "--text", "System prompt"], "label": "Config form fields render (system prompt)" }
+  ]
+}

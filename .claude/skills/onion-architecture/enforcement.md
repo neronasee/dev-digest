@@ -20,8 +20,8 @@ CommonJS on purpose: `server/package.json` has `"type": "module"`, so a plain
 | `core-openai-egress-only` | error | `reviewer-core/src` (pathNot `llm/openrouter\.ts$`, `llm/structured\.ts$`) | resolved `openai` package paths |
 | `services-depend-on-ports` | error | `src/modules/[^/]+/(service\|run-executor)[^/]*\.ts$` (pathNot `src/modules/repo-intel/`) | `src/adapters/` |
 | `routes-are-thin` | error | `src/modules/[^/]+/routes\.ts$` | `src/adapters/` |
-| `db-confined-to-repositories` | warn | `src/modules/` (pathNot `src/modules/[^/]+/repository`) | `src/db/schema`, `^drizzle-orm` |
-| `no-cross-module-internals` | warn | `^src/modules/([^/]+)/` | `^src/modules/([^/]+)/` (pathNot `^src/modules/$1/`, `^src/modules/_shared/`) |
+| `db-confined-to-repositories` | error | `src/modules/` (pathNot `src/modules/[^/]+/repository`) | `src/db/schema`, `^drizzle-orm` |
+| `no-cross-module-internals` | error | `^src/modules/([^/]+)/` | `^src/modules/([^/]+)/` (pathNot `^src/modules/$1/`, `^src/modules/_shared/`) |
 | `adapters-dont-know-modules` | error | `^src/adapters/` | `^src/modules/` (pathNot `^src/modules/repo-intel/constants`) |
 
 `options`: `doNotFollow: node_modules` (npm packages appear as edges but are
@@ -60,24 +60,30 @@ pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type err-long 
 pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type dot | dot -Tsvg > graph.svg
 ```
 
-## Baseline (2026-09-19, measured on this branch)
+## Baseline (2026-09-20, after the Wave-2 B14 fix)
 
-**0 errors, 14 warnings — 145 modules, 452 dependencies.**
+**0 errors, 4 warnings — 155 modules, 487 dependencies.**
 
-(Re-measured 2026-09-19 during R5: dropping `node_modules` from `exclude` —
-required so `core-is-pure` can see npm edges at all — surfaced the ~20
-npm-package stub modules as first-class graph nodes. The violation counts
-did not move: same 0 errors / 14 warnings, same edges listed below.)
+History: 2026-09-19 baseline was **0 errors / 14 warnings / 145 modules /
+454 deps** (the 2026-09-19 R5 fix had already dropped `node_modules` from
+`exclude` so npm edges are visible; the pre-R5 config cruised 125 modules /
+375 deps but could not see npm imports at all). The Wave-1 burn-down
+(2026-09-20, improvement-plan items B1/B5/B13/B15) took both warn rules to
+zero, and they were **promoted to `error`** in the same change:
 
-- `db-confined-to-repositories` — **8 files** query the schema outside a
-  repository: `pulls/routes.ts`, `polling/routes.ts`, `workspace/routes.ts`,
-  `settings/routes.ts`, `settings/feature-models.ts`,
-  `reviews/run-executor.ts`, `reviews/diff-loader.ts`, `repos/helpers.ts`.
-- `no-cross-module-internals` — **1 edge**:
-  `repos/service.ts → repo-intel/constants.js` (relocate the constant).
-- `no-circular` — **5 cycles**: four through the composition root
-  (`repo-intel/service|pipeline ↔ container`) plus one genuine
-  `agents/helpers ↔ agents/repository` cycle.
+- `db-confined-to-repositories` — was **8 files** (pulls, polling, workspace,
+  settings×2, run-executor, diff-loader, repos/helpers) → **0** via B1 (pulls
+  repository/service), B5 (polling/workspace/settings repositories), B15
+  (row types via `db/rows.ts`). Now error-severity: any module file outside a
+  `repository` importing `db/schema`/`drizzle-orm` fails the gate.
+- `no-cross-module-internals` — was **1 edge** (`repos/service.ts →
+  repo-intel/constants.js`) → **0** via B13 (constants hoisted to
+  `modules/_shared/job-kinds.ts`). Now error-severity.
+- `no-circular` — **4 cycles**: all four through the composition root
+  (`repo-intel/service|pipeline ↔ container`, accepted per the decision log
+  — see README). The fifth — the genuine `agents/helpers ↔ agents/repository`
+  cycle — was removed by the Wave-2 B14 fix (helpers imports the row types
+  from `db/rows.ts` instead of the repository) → **4, the accepted floor**.
 
 ## What the gate cannot see
 
@@ -102,18 +108,20 @@ reach and stay reviewer-enforced (the skill's text is the authority):
 
 ## Ratchet strategy
 
-**error (already clean, blocking)**: `core-is-pure`, `core-openai-egress-only`,
-`services-depend-on-ports`, `routes-are-thin`, `adapters-dont-know-modules`.
-A new violation of any of these fails the gate — move the code to the right
-layer or extend the exception ledger below with a reason and a retirement
-plan.
+**error (clean, blocking)**: `core-is-pure`, `core-openai-egress-only`,
+`services-depend-on-ports`,
+`routes-are-thin`, `adapters-dont-know-modules`, and — since the 2026-09-20
+Wave-1 ratchet event — `db-confined-to-repositories` and
+`no-cross-module-internals`. A new violation of any of these fails the gate —
+move the code to the right layer or extend the exception ledger below with a
+reason and a retirement plan.
 
-**warn (burn down, then promote)**: the three lists above. Fix items, watch
-the count shrink, and when a list reaches zero promote the rule to `error` in
-the same change. Suggested order: the cross-module edge (trivial constant
-hoist) → the db burn-down (one module at a time, routes → service →
-repository) → circulars (fix `agents` first, then set an explicit policy for
-container cycles before promoting).
+**warn (burn down, then promote)**: `no-circular` only. Fix the `agents`
+cycle first (Wave-2 B14: helpers imports row types from `db/rows.ts`),
+then set an explicit policy for the four container-root cycles before any
+promotion — they are ledgered as accepted at the composition root (README),
+so the likely end state is a scoped `pathNot` + a documented acceptance, not
+a chase to zero.
 
 When code removes an exception or clears a warn backlog, tighten the config
 in the same change — a lenient setting that outlives its cause silently

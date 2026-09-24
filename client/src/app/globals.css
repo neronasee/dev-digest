@@ -1,15 +1,15 @@
 /* App global stylesheet.
    The design-system styles.css already does `@import "tailwindcss"` and defines
-   the @theme token layer + base resets, so we just re-export it here and add
-   web fonts. */
+   the @theme token layer + base resets, so we just re-export it here. Web fonts
+   are loaded via next/font (Inter, exposed as --font-inter by the root layout)
+   and consumed below, in front of the system-font fallback stack. */
 @import "../vendor/ui/styles.css";
 
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: local("Inter");
+/* styles.css sets body font-family to "Inter" with system fallbacks; next/font
+   self-hosts Inter under its own family name, so prefer the variable first.
+   Same specificity, later source order — this wins over the vendored rule. */
+body {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 @keyframes ddToastIn {

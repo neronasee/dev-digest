@@ -1,8 +1,14 @@
+/**
+ * DB layer — the PR anchor of the review domain: workspace-scoped lookups of
+ * the parent `repos` / `pull_requests` rows, plus `pr_files` and `pr_intent`
+ * (incl. the review-side markReviewed / intent upserts). Consumed only by the
+ * ReviewRepository facade (../repository.ts). No HTTP, no business rules.
+ */
 import { and, eq } from 'drizzle-orm';
-import type { Db } from '../../../db/client.js';
+import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Intent } from '@devdigest/shared';
-import type { PullRow } from '../../../db/rows.js';
+import type { PrFileRow, PullRow, RepoRow } from '../../../db/rows.js';
 
 // ---- PR lookup (workspace-scoped) -----------------------------------------
 
@@ -18,18 +24,12 @@ export async function getPull(
   return row;
 }
 
-export async function getRepo(
-  db: Db,
-  repoId: string,
-): Promise<typeof t.repos.$inferSelect | undefined> {
+export async function getRepo(db: Db, repoId: string): Promise<RepoRow | undefined> {
   const [row] = await db.select().from(t.repos).where(eq(t.repos.id, repoId));
   return row;
 }
 
-export async function getPrFiles(
-  db: Db,
-  prId: string,
-): Promise<(typeof t.prFiles.$inferSelect)[]> {
+export async function getPrFiles(db: Db, prId: string): Promise<PrFileRow[]> {
   return db.select().from(t.prFiles).where(eq(t.prFiles.prId, prId));
 }
 
@@ -37,7 +37,7 @@ export async function getPrFiles(
  * Record the commit a review just ran against, so the PR list can derive
  * `reviewed` vs `needs_review` (head moved since the last review) vs `stale`.
  */
-export async function markReviewed(db: Db, prId: string, sha: string): Promise<void> {
+export async function markReviewed(db: DbOrTx, prId: string, sha: string): Promise<void> {
   await db
     .update(t.pullRequests)
     .set({ lastReviewedSha: sha })

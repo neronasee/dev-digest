@@ -110,7 +110,7 @@ jobs:
       # --- agent-browser CLI (Rust + CDP) + Chrome for Testing ---
       - name: Install agent-browser
         run: |
-          npm i -g agent-browser
+          npm i -g agent-browser@0.27
           agent-browser install --with-deps
 
       - name: Run e2e flows

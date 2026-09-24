@@ -7,7 +7,7 @@ import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
-import type { Review } from '@devdigest/shared';
+import type { Review, StructuredRequest, StructuredResult } from '@devdigest/shared';
 
 const hasDocker = await dockerAvailable();
 const d = hasDocker ? describe : describe.skip;
@@ -191,6 +191,9 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     // Score is derived from the GROUNDED findings, not the model's self-reported
     // 42: grounding keeps one CRITICAL (line 11) ⇒ 100 − 35 = 65.
     expect(review.score).toBe(65);
+    expect(review.blockers).toBe(1);
+    expect(review.grounding).toBe('1/2 passed');
+    expect(review.grounding_dropped).toBe(1);
     // grounding kept only the valid finding (line 11), dropped the line-999 one
     expect(review.findings).toHaveLength(1);
     expect(review.findings[0].file).toBe('src/config.ts');
@@ -201,6 +204,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     const trace = (await app.inject({ method: 'GET', url: `/runs/${runId}/trace` })).json();
     expect(trace.config.model).toBe('gpt-4.1');
     expect(trace.stats.grounding).toBe('1/2 passed');
+    expect(trace.stats).toMatchObject({ grounding_kept: 1, grounding_total: 2, grounding_dropped: 1 });
     expect(trace.log.length).toBeGreaterThan(0);
 
     // agent_runs row populated for A5 to aggregate
@@ -208,6 +212,12 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(run!.status).toBe('done');
     expect(run!.findingsCount).toBe(1);
     expect(run!.grounding).toBe('1/2 passed');
+    expect(run!.groundingDropped).toBe(1);
+    expect(run!.startedAt).toBeInstanceOf(Date);
+
+    const history = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
+    expect(history[0]).toMatchObject({ verdict: review.verdict, blockers: 1, grounding_dropped: 1 });
+    expect(history[0].started_at).not.toBeNull();
 
     await app.close();
   });
@@ -260,6 +270,11 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(dismissed.finding.dismissed_at).not.toBeNull();
     expect(dismissed.finding.accepted_at).toBeNull();
 
+    const afterAction = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/reviews` })).json()[0];
+    const historicalRun = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json()[0];
+    expect(afterAction).toMatchObject({ verdict: 'request_changes', score: 65, blockers: 1 });
+    expect(historicalRun).toMatchObject({ verdict: 'request_changes', score: 65, blockers: 1 });
+
     await app.close();
   });
 
@@ -297,6 +312,59 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     ).json();
     // seed has 2 enabled agents; we may have created more above in this PR's ws.
     expect(body.runs.length).toBeGreaterThanOrEqual(2);
+    await app.close();
+  });
+
+  it('keeps agents sequential and lets a queued run be polled then cancelled before execution', async () => {
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    class ControlledLLM extends MockLLMProvider {
+      completions = 0;
+      override async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+        this.completions++;
+        if (this.completions === 1) await firstGate;
+        return super.completeStructured(req);
+      }
+    }
+    const llm = new ControlledLLM('openai', { structured: REVIEW_FIXTURE });
+    const app = await buildApp({
+      config: config(),
+      db: pg.handle.db,
+      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: DIFF }), llm: { openai: llm } },
+    });
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+
+    const existing = (await app.inject({ method: 'GET', url: '/agents' })).json();
+    for (const agent of existing) {
+      await app.inject({ method: 'PUT', url: `/agents/${agent.id}`, payload: { enabled: false } });
+    }
+    for (const name of ['Sequential One', 'Sequential Two']) {
+      await app.inject({
+        method: 'POST',
+        url: '/agents',
+        payload: { name, provider: 'openai', model: 'gpt-4.1', system_prompt: 'review' },
+      });
+    }
+
+    const started = (await app.inject({ method: 'POST', url: `/pulls/${pr.id}/review`, payload: { all: true } })).json();
+    expect(started.runs).toHaveLength(2);
+
+    let active: any[] = [];
+    for (let i = 0; i < 100; i++) {
+      active = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs/active` })).json();
+      if (active.some((run) => run.status === 'running') && active.some((run) => run.status === 'queued')) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const running = active.find((run) => run.status === 'running');
+    const queued = active.find((run) => run.status === 'queued');
+    expect(running.started_at).not.toBeNull();
+    expect(queued.started_at).toBeNull();
+
+    expect((await app.inject({ method: 'POST', url: `/runs/${queued.run_id}/cancel` })).statusCode).toBe(200);
+    releaseFirst();
+    const settled = await waitForPrRuns(pg.handle.db, pr.id, { expected: 2 });
+    expect(settled.map((run) => run.status).sort()).toEqual(['cancelled', 'done']);
+    expect(llm.completions).toBe(1);
     await app.close();
   });
 

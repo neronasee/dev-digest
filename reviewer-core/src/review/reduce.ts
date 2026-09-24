@@ -65,8 +65,23 @@ export function sliceDiff(diff: UnifiedDiff, path: string): string {
     if (capture) out.push(line);
   }
   if (out.length > 0) return out.join('\n');
-  // fallback: synthesize from the file's hunks
+  // Fallback: the raw slice found nothing for this path (quoted/rename paths in
+  // `raw` the matcher above can't see), but the parsed file record exists.
+  // Reconstruct a unified diff from the hunk metadata so the map chunk is never
+  // a bare header with no hunks — downstream would silently review an empty
+  // diff. DiffHunk stores ranges + new-side line numbers, not text, so each
+  // covered new line renders as a placeholder `+` body line instead of code
+  // (the same covered-lines set grounding's buildLineIndex uses).
   const f = diff.files.find((x) => x.path === path);
   if (!f) return diff.raw;
-  return `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}`;
+  const body: string[] = [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`];
+  for (const h of f.hunks) {
+    body.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
+    const covered =
+      h.newLineNumbers.length > 0
+        ? h.newLineNumbers
+        : Array.from({ length: Math.max(h.newLines, 1) }, (_, i) => h.newStart + i);
+    for (const n of covered) body.push(`+ [line ${n}]`);
+  }
+  return body.join('\n');
 }

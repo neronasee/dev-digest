@@ -50,8 +50,8 @@ export const Finding = z.object({
   category: FindingCategory,
   title: z.string(),
   file: z.string(),
-  start_line: z.number().int(),
-  end_line: z.number().int(),
+  start_line: z.number().int().min(1).describe('First changed diff line cited by this finding (integer >= 1).'),
+  end_line: z.number().int().min(1).describe('Last changed diff line cited by this finding (integer >= 1).'),
   rationale: z.string(), // markdown
   suggestion: z.string().nullish(), // markdown
   confidence: z.number().min(0).max(1),
@@ -74,8 +74,8 @@ export const FindingPreview = z.object({
   category: FindingCategory,
   title: z.string(),
   file: z.string(),
-  start_line: z.number().int(),
-  end_line: z.number().int(),
+  start_line: z.number().int().min(1),
+  end_line: z.number().int().min(1),
   confidence: z.number().min(0).max(1),
   rationale: z.string(),
 });

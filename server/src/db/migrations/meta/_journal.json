@@ -78,6 +78,20 @@
       "when": 1789508298748,
       "tag": "0010_old_phalanx",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789816313826,
+      "tag": "0011_cuddly_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789984143010,
+      "tag": "0012_wide_the_order",
+      "breakpoints": true
     }
   ]
 }

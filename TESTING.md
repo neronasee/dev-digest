@@ -70,7 +70,7 @@ cd server && pnpm test                                          # both
 
 # browser e2e (needs the full stack + agent-browser CLI)
 ./scripts/dev.sh
-npm i -g agent-browser && agent-browser install
+npm i -g agent-browser@0.27 && agent-browser install
 cd e2e && npm install && npm test
 ```
 

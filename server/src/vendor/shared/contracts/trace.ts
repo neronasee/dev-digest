@@ -66,6 +66,9 @@ export const RunStats = z.object({
   cost_usd: z.number().nullable(),
   findings: z.number().int(),
   grounding: z.string(),
+  grounding_kept: z.number().int().min(0).default(0),
+  grounding_total: z.number().int().min(0).default(0),
+  grounding_dropped: z.number().int().min(0).default(0),
 });
 export type RunStats = z.infer<typeof RunStats>;
 
@@ -89,6 +92,17 @@ export const RunTrace = z.object({
 });
 export type RunTrace = z.infer<typeof RunTrace>;
 
+/** A queued/running run returned by the active-runs polling endpoint. */
+export const ActiveRunSummary = z.object({
+  run_id: z.string(),
+  agent_id: z.string().nullable(),
+  agent_name: z.string().nullable(),
+  status: z.enum(['queued', 'running']),
+  ran_at: z.string().nullable(),
+  started_at: z.string().nullable(),
+});
+export type ActiveRunSummary = z.infer<typeof ActiveRunSummary>;
+
 /**
  * One row of a PR's run history (every agent_runs row, any status). Surfaced on
  * the PR page so runs — including FAILED ones with their error — survive reload.
@@ -99,7 +113,7 @@ export const RunSummary = z.object({
   agent_name: z.string().nullable(),
   provider: z.string().nullable(),
   model: z.string().nullable(),
-  status: z.string().nullable(), // running | done | failed | cancelled
+  status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
   error: z.string().nullable(),
   duration_ms: z.number().int().nullable(),
   tokens_in: z.number().int().nullable(),
@@ -109,11 +123,14 @@ export const RunSummary = z.object({
   cost_usd: z.number().nullable(),
   findings_count: z.number().int().nullable(),
   grounding: z.string().nullable(),
+  grounding_dropped: z.number().int().min(0).nullable(),
   ran_at: z.string().nullable(),
+  started_at: z.string().nullable(),
   // Review outcome, denormalized onto the run row at completion (the timeline
   // has no FK to the review). score = the review's 0-100 score; blockers =
   // findings that trip the agent's gate. Null on failed/cancelled runs.
   score: z.number().int().nullable(),
   blockers: z.number().int().nullable(),
+  verdict: z.enum(['request_changes', 'approve', 'comment']).nullable(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

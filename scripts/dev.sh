@@ -93,11 +93,45 @@ if [ "$DB_ONLY" -eq 1 ]; then
   exit 0
 fi
 
+# --- port pre-checks ---------------------------------------------------------
+# Fail fast with the offending PID instead of a deep EADDRINUSE buried in pnpm
+# output when a stale server from an earlier run still holds the port. Same
+# lsof probe e2e.sh uses for its teardown backstop. Placed after the --db-only
+# exit: that mode binds no dev ports, so it must not be blocked by them.
+require_port_free() {
+  local port="$1" pids pid
+  pids="$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null || true)"
+  [ -z "$pids" ] && return 0
+  {
+    echo "port :$port is already in use — a stale dev server from an earlier run?"
+    for pid in $pids; do
+      echo "  PID $pid ($(ps -p "$pid" -o comm= 2>/dev/null || echo unknown))"
+    done
+    echo "stop it first: kill $pids"
+  } >&2
+  exit 1
+}
+require_port_free 3001   # API
+[ "$RUN_CLIENT" -eq 1 ] && require_port_free 3000   # web
+
 # --- dev servers -------------------------------------------------------------
 SERVER_PID=""
+CLIENT_PID=""
+# Recursively kill a process and all its descendants. `pnpm dev` spawns the real
+# listener (node/tsx, next-server) as a GRANDCHILD, so a plain `kill $PID` can
+# leave it orphaned with the port still bound. Duplicated from scripts/e2e.sh
+# (its cleanup) — keep the two in sync.
+kill_tree() {
+  local pid="$1"
+  [ -n "$pid" ] || return 0
+  local kid
+  for kid in $(pgrep -P "$pid" 2>/dev/null || true); do kill_tree "$kid"; done
+  kill "$pid" 2>/dev/null || true
+}
 cleanup() {
   log "shutting down dev servers (Postgres stays up; stop it with: docker compose down)"
-  [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null || true
+  kill_tree "$SERVER_PID"
+  kill_tree "$CLIENT_PID"
 }
 trap cleanup EXIT INT TERM
 
@@ -107,7 +141,9 @@ SERVER_PID=$!
 
 if [ "$RUN_CLIENT" -eq 1 ]; then
   log "starting web on :3000 (client) — Ctrl-C to stop both"
-  (cd client && pnpm dev)
+  (cd client && pnpm dev) &
+  CLIENT_PID=$!
+  wait "$CLIENT_PID"
 else
   log "API running (PID $SERVER_PID) — Ctrl-C to stop"
   wait "$SERVER_PID"

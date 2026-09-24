@@ -2,8 +2,7 @@ import type { Container } from '../../platform/container.js';
 import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
-import * as schema from '../../db/schema.js';
-import type { AgentRow } from '../../db/rows.js';
+import type { AgentRow, RepoRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
@@ -55,7 +54,7 @@ export class ReviewRunExecutor {
   async executeRuns(
     workspaceId: string,
     pull: PullRow,
-    repo: typeof schema.repos.$inferSelect,
+    repo: RepoRow,
     jobs: { agent: AgentRow; runId: string }[],
     logger?: Logger,
   ): Promise<void> {
@@ -83,6 +82,7 @@ export class ReviewRunExecutor {
             costUsd: null,
             findingsCount: 0,
             grounding: '0/0 passed',
+            groundingDropped: 0,
             error: msg,
           })
           .catch(() => undefined);
@@ -106,6 +106,10 @@ export class ReviewRunExecutor {
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
     for (const { agent, runId } of jobs) {
+      // A queued run may have been cancelled while a previous agent was using
+      // the provider. Claim it atomically; if it is no longer queued, do no
+      // enrichment or LLM work for it.
+      if (!(await this.repo.startAgentRun(runId))) continue;
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
@@ -139,7 +143,7 @@ export class ReviewRunExecutor {
   private async runOneAgent(
     workspaceId: string,
     pull: PullRow,
-    repo: typeof schema.repos.$inferSelect,
+    repo: RepoRow,
     diff: UnifiedDiff,
     agent: AgentRow,
     runId: string,
@@ -196,6 +200,7 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        ciFailOn: agent.ciFailOn,
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -216,23 +221,25 @@ export class ReviewRunExecutor {
       const keptFindings = outcome.review.findings;
 
       // ---- Persist review + findings ----------------------------------------
-      const review = await this.repo.insertReview({
-        workspaceId,
-        prId: pull.id,
-        agentId: agent.id,
-        runId,
-        kind: 'review',
-        verdict: outcome.review.verdict,
-        summary: outcome.review.summary,
-        score: outcome.review.score,
-        model: agent.model,
-      });
-      const findingRows = await this.repo.insertFindings(review.id, keptFindings);
+      // B3 — review + findings + markReviewed commit as ONE transaction.
+      const { review, findings: findingRows } = await this.repo.persistReviewWithFindings(
+        {
+          workspaceId,
+          prId: pull.id,
+          agentId: agent.id,
+          runId,
+          kind: 'review',
+          verdict: outcome.review.verdict,
+          summary: outcome.review.summary,
+          score: outcome.review.score,
+          model: agent.model,
+        },
+        keptFindings,
+        // Mark the commit this review ran against so the PR list can tell
+        // reviewed / needs-review (head moved) / stale apart.
+        { prId: pull.id, sha: pull.headSha },
+      );
       runLog.result(`Persisted review ${review.id} with ${findingRows.length} finding(s)`);
-
-      // Mark the commit this review ran against so the PR list can tell
-      // reviewed / needs-review (head moved) / stale apart.
-      await this.repo.markReviewed(pull.id, pull.headSha);
 
       const durationMs = Date.now() - start;
 
@@ -249,6 +256,7 @@ export class ReviewRunExecutor {
         costUsd,
         findingsCount: findingRows.length,
         grounding,
+        groundingDropped: outcome.groundingDropped,
         score: outcome.review.score,
         blockers,
         error: null,
@@ -270,6 +278,9 @@ export class ReviewRunExecutor {
           cost_usd: costUsd,
           findings: findingRows.length,
           grounding,
+          grounding_kept: keptFindings.length,
+          grounding_total: keptFindings.length + outcome.groundingDropped,
+          grounding_dropped: outcome.groundingDropped,
         },
         prompt_assembly: outcome.assembly,
         tool_calls: outcome.chunks.map((c) => ({
@@ -306,6 +317,7 @@ export class ReviewRunExecutor {
           costUsd: null,
           findingsCount: 0,
           grounding: '0/0 passed',
+          groundingDropped: 0,
           error: msg,
         })
         .catch(() => undefined);
@@ -425,7 +437,17 @@ export class ReviewRunExecutor {
         pr: pull.number,
         source: 'local',
       },
-      stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
+      stats: {
+        duration_ms: durationMs,
+        tokens_in: 0,
+        tokens_out: 0,
+        cost_usd: null,
+        findings: 0,
+        grounding,
+        grounding_kept: 0,
+        grounding_total: 0,
+        grounding_dropped: 0,
+      },
       prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',

@@ -29,6 +29,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { RepoIntelRepository, type FullSymbolRow } from './repository.js';
+import { NotFoundError } from '../../platform/errors.js';
 import type {
   BlastCallerRow,
   BlastChangedSymbol,
@@ -202,6 +203,20 @@ export class RepoIntelService implements RepoIntel {
       degraded: true,
       degradedReason: 'no_data',
     };
+  }
+
+  /**
+   * B12 — tenancy gate for the HTTP routes. Verifies the repo belongs to the
+   * workspace (scoped `repos` lookup) BEFORE any facade method acts on the
+   * repoId, throwing NotFoundError otherwise — a foreign repo is
+   * indistinguishable from a missing one (no existence leak). The facade
+   * methods themselves stay tenant-agnostic: job payloads were already
+   * authorized by the authenticated request that enqueued them.
+   */
+  async assertRepoInWorkspace(workspaceId: string, repoId: string): Promise<void> {
+    if (!(await this.repo.repoInWorkspace(workspaceId, repoId))) {
+      throw new NotFoundError('Repo not found');
+    }
   }
 
   // -------------------------------------------------------------------------

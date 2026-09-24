@@ -6,12 +6,13 @@
  * only that severity, click again → full list).
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 
-vi.mock("../../../../../../../lib/hooks/reviews", () => ({
+vi.mock("@/lib/hooks/reviews", () => ({
   useFindingAction: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -90,18 +91,19 @@ describe("FindingsPanel — severity pills", () => {
     expect(screen.queryByRole("button", { name: /suggestion/i })).not.toBeInTheDocument();
   });
 
-  it("clicking a pill leaves only that severity; clicking it again restores the full list", () => {
+  it("clicking a pill leaves only that severity; clicking it again restores the full list", async () => {
+    const user = userEvent.setup();
     renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
     const critical = screen.getByRole("button", { name: /critical 1/i });
 
-    fireEvent.click(critical);
+    await user.click(critical);
     expect(critical).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Critical one")).toBeInTheDocument();
     expect(screen.queryByText("Warning high")).not.toBeInTheDocument();
     expect(screen.queryByText("Warning low")).not.toBeInTheDocument();
     expect(screen.queryByText("Suggestion one")).not.toBeInTheDocument();
 
-    fireEvent.click(critical);
+    await user.click(critical);
     expect(critical).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByText("Critical one")).toBeInTheDocument();
     expect(screen.getByText("Warning high")).toBeInTheDocument();
@@ -109,24 +111,26 @@ describe("FindingsPanel — severity pills", () => {
     expect(screen.getByText("Suggestion one")).toBeInTheDocument();
   });
 
-  it("switching pills re-targets the filter instead of stacking", () => {
+  it("switching pills re-targets the filter instead of stacking", async () => {
+    const user = userEvent.setup();
     renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
-    fireEvent.click(screen.getByRole("button", { name: /critical 1/i }));
-    fireEvent.click(screen.getByRole("button", { name: /warning 2/i }));
+    await user.click(screen.getByRole("button", { name: /critical 1/i }));
+    await user.click(screen.getByRole("button", { name: /warning 2/i }));
     expect(screen.queryByText("Critical one")).not.toBeInTheDocument();
     expect(screen.getByText("Warning high")).toBeInTheDocument();
     expect(screen.getByText("Warning low")).toBeInTheDocument();
   });
 
-  it("pill counts follow the confidence filter (hide-low keeps crit 17 true)", () => {
+  it("pill counts follow the confidence filter (hide-low keeps crit 17 true)", async () => {
+    const user = userEvent.setup();
     renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" />);
-    fireEvent.click(screen.getByRole("switch")); // Hide low confidence on
+    await user.click(screen.getByRole("switch")); // Hide low confidence on
     // The 0.5-confidence WARNING drops out → its pill now reads "Warning 1".
     expect(screen.getByRole("button", { name: /warning 1/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /warning 2/i })).not.toBeInTheDocument();
     expect(screen.queryByText("Warning low")).not.toBeInTheDocument();
     // And the filter still composes with the shrunken set.
-    fireEvent.click(screen.getByRole("button", { name: /warning 1/i }));
+    await user.click(screen.getByRole("button", { name: /warning 1/i }));
     expect(screen.getByText("Warning high")).toBeInTheDocument();
     expect(screen.queryByText("Critical one")).not.toBeInTheDocument();
   });

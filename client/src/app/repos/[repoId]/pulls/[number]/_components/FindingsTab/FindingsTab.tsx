@@ -3,12 +3,12 @@
 import React, { useCallback } from "react";
 import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
-import { RunHistory } from "../RunHistory/RunHistory";
+import { RunHistory } from "../RunHistory";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
 import type { UseMutationResult } from "@tanstack/react-query";
-import { countBySeverity, type SeverityCounts } from "../../../../../../../lib/severity";
+import { countBySeverity, type SeverityCounts } from "@/lib/severity";
 
 interface FindingsTabProps {
   prId: string | null;
@@ -50,26 +50,12 @@ export function FindingsTab({
     if (liveRunIds[0]) onOpenTrace(liveRunIds[0]);
   }, [liveRunIds, onOpenTrace]);
 
-  const handleOpenTrace = useCallback(
-    (id: string) => {
-      onOpenTrace(id);
-    },
-    [onOpenTrace],
-  );
-
-  const handleDelete = useCallback(
-    (id: string) => {
-      onDelete(id);
-    },
-    [onDelete],
-  );
-
-  // Timeline → Review-runs navigation: clicking an agent name in the timeline
-  // opens + scrolls to that run's accordion below. The nonce re-triggers the
-  // scroll even when the same run is clicked twice.
-  const [target, setTarget] = React.useState<{ runId: string; n: number } | null>(null);
-  const handleGoToReview = useCallback((runId: string) => {
-    setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
+  // Timeline → Review-runs navigation: open the targeted accordion before
+  // scrolling to it. The request counter makes a repeated click work even if
+  // the user collapsed the same accordion between clicks.
+  const [reviewTarget, setReviewTarget] = React.useState<{ runId: string; request: number } | null>(null);
+  const goToReview = useCallback((runId: string) => {
+    setReviewTarget((previous) => ({ runId, request: (previous?.request ?? 0) + 1 }));
   }, []);
 
   // Per-run severity tallies for the timeline tiles, grouped client-side from
@@ -144,9 +130,9 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
-            onOpenTrace={handleOpenTrace}
-            onGoToReview={handleGoToReview}
-            onDelete={handleDelete}
+            onOpenTrace={onOpenTrace}
+            onGoToReview={goToReview}
+            onDelete={onDelete}
             severityByRun={severityByRun}
           />
         </div>
@@ -176,8 +162,8 @@ export function FindingsTab({
             defaultOpen={i === 0}
             repoFullName={repoFullName}
             headSha={headSha}
-            targetRunId={target?.runId ?? null}
-            targetNonce={target?.n ?? 0}
+            targetRunId={reviewTarget?.runId ?? null}
+            targetRequest={reviewTarget?.request ?? 0}
           />
         ))
       )}

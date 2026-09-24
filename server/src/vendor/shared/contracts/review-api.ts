@@ -32,6 +32,8 @@ export const ReviewRecord = z.object({
   score: z.number().int().nullable(),
   model: z.string().nullable(),
   grounding: z.string().nullish(),
+  grounding_dropped: z.number().int().min(0).nullish(),
+  blockers: z.number().int().min(0).nullish(),
   created_at: z.string(),
   findings: z.array(FindingRecord),
 });

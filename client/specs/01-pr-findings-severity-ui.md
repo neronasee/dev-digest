@@ -16,6 +16,12 @@ Four surfaces over the findings' `severity` field (`CRITICAL | WARNING | SUGGEST
    with a hover popover titled «N FINDINGS IN THIS RUN» listing that PR's
    latest-round findings read-only (severity icon, title, category,
    file:line, % confidence, 2-line-clamped rationale — **no buttons**).
+5. **Run truthfulness** — the Agent runs tab badge counts all historical run
+   rows (queued/running/done/failed/cancelled), while timeline outcome and the
+   review accordion use persisted deterministic verdict/blocker metadata.
+6. **Grounding visibility** — affected accordions disclose the dropped
+   candidate count. Trace grounding is green for all-pass, amber for partial,
+   red for zero-pass with candidates, and neutral for zero candidates.
 
 ## Must
 
@@ -49,6 +55,9 @@ Four surfaces over the findings' `severity` field (`CRITICAL | WARNING | SUGGEST
   needs a fifth of the fields, and actions belong to the detail page.
 - Latest-round semantics (server-side) mirror `cost_usd`, so the FINDINGS
   column, the Cost column, and the detail page's newest state agree.
+- Finding acceptance/dismissal never rewrites historical verdict, score, or
+  blocker counts. Empty Memory/Specs telemetry rows are omitted. Queued runs
+  show enqueue time; running/terminal runs show execution start time.
 
 ## Where
 

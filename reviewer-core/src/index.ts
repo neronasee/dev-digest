@@ -53,6 +53,7 @@ export {
   countBlockers,
   type ToReviewOptions,
 } from './output/to-review.js';
+export { outcomeFromFindings } from './review/outcome.js';
 
 // The single OpenAI-compatible structured provider (OpenRouter), shared by the
 // CI runner and the server's openrouter path. Owns session grouping + guards.

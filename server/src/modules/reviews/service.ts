@@ -61,7 +61,7 @@ export class ReviewService {
     return this.repo.deleteReview(workspaceId, reviewId);
   }
 
-  /** In-flight runs for a PR (server-side source of truth, survives reload). */
+  /** Active queued/running runs for a PR (server-side truth, survives reload). */
   async activeRuns(workspaceId: string, prId: string) {
     return this.repo.activeRunsForPull(workspaceId, prId);
   }
@@ -81,15 +81,22 @@ export class ReviewService {
    * checkpoint AND marks the DB row cancelled + completes the bus immediately —
    * so cancel also works for ORPHANED runs (whose background process died on a
    * server restart) where signalling alone would do nothing.
+   *
+   * B12 — the run is resolved as (id, workspaceId) FIRST: a foreign run gets a
+   * 404 and receives NO bus events (publishing to it would inject a
+   * "Cancellation requested" line — and a bus complete() — into another
+   * workspace's live stream).
    */
-  async cancelRun(runId: string): Promise<void> {
+  async cancelRun(workspaceId: string, runId: string): Promise<void> {
+    const run = await this.repo.getRun(workspaceId, runId);
+    if (!run) throw new NotFoundError('Run not found');
     this.publish(runId, 'info', 'Cancellation requested — stopping…');
     this.container.runBus.cancel(runId);
-    await this.repo.cancelRunIfRunning(runId);
+    await this.repo.cancelRunIfRunning(workspaceId, runId);
     this.container.runBus.complete(runId);
   }
 
-  /** Reap runs left 'running' by a previous (now-dead) process. Called on boot. */
+  /** Reap queued/running runs left by a previous (now-dead) process. */
   async reapStaleRuns(): Promise<number> {
     return this.repo.reapStaleRunningRuns();
   }
@@ -165,19 +172,26 @@ export class ReviewService {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
     const rows = await this.repo.reviewsForPull(prId);
-    const names = new Map<string, string>();
-    for (const { review } of rows) {
-      if (review.agentId && !names.has(review.agentId)) {
-        const a = await this.agents.getById(workspaceId, review.agentId);
-        if (a) names.set(review.agentId, a.name);
-      }
-    }
-    return rows.map(({ review, findings }) =>
-      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null),
+    // B20 — ONE namesByIds fetch for every distinct agent on the PR (was a
+    // per-review `agents.getById` await: the bounded N+1).
+    const agentIds = [
+      ...new Set(
+        rows
+          .map(({ review }) => review.agentId)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const names = new Map(
+      (await this.agents.namesByIds(workspaceId, agentIds)).map((a) => [a.id, a.name]),
+    );
+    return rows.map(({ review, findings, run }) =>
+      reviewToDto(review, findings, review.agentId ? names.get(review.agentId) : null, run),
     );
   }
 
-  async getRunTrace(runId: string): Promise<RunTrace | undefined> {
-    return this.repo.getRunTrace(runId);
+  /** The single-document RunTrace of a run of THIS workspace (B12 tenancy
+   *  scope — a foreign run's trace is indistinguishable from a missing one). */
+  async getRunTrace(workspaceId: string, runId: string): Promise<RunTrace | undefined> {
+    return this.repo.getRunTrace(workspaceId, runId);
   }
 }

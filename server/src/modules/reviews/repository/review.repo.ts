@@ -1,15 +1,85 @@
+/**
+ * DB layer — reviews + findings queries (B2 PR-list rollup read surface
+ * included). Owns the `reviews` and `findings` tables; consumed only by the
+ * ReviewRepository facade (../repository.ts). No HTTP, no business rules.
+ */
 import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { Db } from '../../../db/client.js';
+import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
 import type { Finding } from '@devdigest/shared';
-import type { FindingRow, PullRow } from '../../../db/rows.js';
+import type { FindingRow, PullRow, ReviewRow } from '../../../db/rows.js';
 
-export type ReviewRow = typeof t.reviews.$inferSelect;
+export type { ReviewRow };
 
 // ---- reviews + findings ---------------------------------------------------
 
-export async function insertReview(
+/** PR-LIST rollup read surface (B2): newest-first (created_at desc) review
+ *  SCORE rows for a PR set, kind='review' only. The consumer resolves "the
+ *  latest review per PR" by taking the first row it sees per PR. */
+export async function latestReviewScores(
   db: Db,
+  prIds: string[],
+): Promise<{ prId: string; score: number | null }[]> {
+  if (prIds.length === 0) return [];
+  return db
+    .select({ prId: t.reviews.prId, score: t.reviews.score })
+    .from(t.reviews)
+    .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
+    .orderBy(desc(t.reviews.createdAt));
+}
+
+/** Reviews produced by the given runs (id + runId) — the join step between a
+ *  round's runs and those reviews' findings (PR-list rollup). */
+export async function reviewIdsByRunIds(
+  db: Db,
+  runIds: string[],
+): Promise<{ id: string; runId: string | null }[]> {
+  if (runIds.length === 0) return [];
+  return db
+    .select({ id: t.reviews.id, runId: t.reviews.runId })
+    .from(t.reviews)
+    .where(inArray(t.reviews.runId, runIds));
+}
+
+/** Slim finding rows (the FindingPreview columns) for the given reviews —
+ *  the PR-list FINDINGS column popover's data. */
+export async function findingPreviewsByReviewIds(
+  db: Db,
+  reviewIds: string[],
+): Promise<
+  {
+    reviewId: string;
+    id: string;
+    severity: string;
+    category: string;
+    title: string;
+    file: string;
+    startLine: number;
+    endLine: number;
+    confidence: number;
+    rationale: string;
+  }[]
+> {
+  if (reviewIds.length === 0) return [];
+  return db
+    .select({
+      reviewId: t.findings.reviewId,
+      id: t.findings.id,
+      severity: t.findings.severity,
+      category: t.findings.category,
+      title: t.findings.title,
+      file: t.findings.file,
+      startLine: t.findings.startLine,
+      endLine: t.findings.endLine,
+      confidence: t.findings.confidence,
+      rationale: t.findings.rationale,
+    })
+    .from(t.findings)
+    .where(inArray(t.findings.reviewId, reviewIds));
+}
+
+export async function insertReview(
+  db: DbOrTx,
   values: {
     workspaceId: string;
     prId: string;
@@ -27,7 +97,7 @@ export async function insertReview(
 }
 
 export async function insertFindings(
-  db: Db,
+  db: DbOrTx,
   reviewId: string,
   findings: Finding[],
 ): Promise<FindingRow[]> {
@@ -58,7 +128,11 @@ export async function insertFindings(
 export async function reviewsForPull(
   db: Db,
   prId: string,
-): Promise<{ review: ReviewRow; findings: FindingRow[] }[]> {
+): Promise<{
+  review: ReviewRow;
+  findings: FindingRow[];
+  run: { grounding: string | null; groundingDropped: number | null; blockers: number | null } | null;
+}[]> {
   const reviews = await db
     .select()
     .from(t.reviews)
@@ -67,9 +141,23 @@ export async function reviewsForPull(
   if (reviews.length === 0) return [];
   const ids = reviews.map((r) => r.id);
   const findings = await db.select().from(t.findings).where(inArray(t.findings.reviewId, ids));
+  const runIds = reviews.map((review) => review.runId).filter((id): id is string => id != null);
+  const runs = runIds.length === 0
+    ? []
+    : await db
+        .select({
+          id: t.agentRuns.id,
+          grounding: t.agentRuns.grounding,
+          groundingDropped: t.agentRuns.groundingDropped,
+          blockers: t.agentRuns.blockers,
+        })
+        .from(t.agentRuns)
+        .where(inArray(t.agentRuns.id, runIds));
+  const runById = new Map(runs.map((run) => [run.id, run]));
   return reviews.map((review) => ({
     review,
     findings: findings.filter((f) => f.reviewId === review.id),
+    run: review.runId ? runById.get(review.runId) ?? null : null,
   }));
 }
 

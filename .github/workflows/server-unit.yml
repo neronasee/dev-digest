@@ -63,6 +63,13 @@ jobs:
         working-directory: reviewer-core
         run: npm ci
 
+      # Vendored shared contracts must stay byte-identical server↔client
+      # (docs/improvement-plan-2026-09-19.md, X1). This workflow is
+      # path-filtered to server/**, so it catches server-side drift;
+      # client.yml carries the same gate for client-side drift.
+      - name: Vendored shared in sync
+        run: diff -rq src/vendor/shared ../client/src/vendor/shared
+
       - run: pnpm typecheck
 
       # Onion-architecture gate (see .claude/skills/onion-architecture/):

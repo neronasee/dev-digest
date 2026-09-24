@@ -1,13 +1,17 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { RunTrace } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/runs.json"; // apps/web/messages/en/runs.json
 
 // Mock the trace hooks so the drawer renders without a query client / SSE.
+// `box` lets individual tests swap the served trace (see the grounding tests).
+const box = vi.hoisted(() => ({ current: undefined as RunTrace | undefined }));
+
 const TRACE: RunTrace = {
   config: { agent: "Security", version: "1", provider: "openai", model: "gpt-4.1", pr: 482, source: "local" },
-  stats: { duration_ms: 8200, tokens_in: 12000, tokens_out: 1500, cost_usd: 0.06, findings: 2, grounding: "2/2 passed" },
+  stats: { duration_ms: 8200, tokens_in: 12000, tokens_out: 1500, cost_usd: 0.06, findings: 2, grounding: "2/2 passed", grounding_kept: 2, grounding_total: 2, grounding_dropped: 0 },
   prompt_assembly: { system: "You are a reviewer.", skills: "### skill", memory: null, specs: null, user: "Review PR #482" },
   tool_calls: [{ tool: "review_file", args: "src/config.ts", meta: "single-pass", ms: 1200 }],
   raw_output: '{"verdict":"request_changes"}',
@@ -19,10 +23,11 @@ const TRACE: RunTrace = {
   ],
 };
 
-vi.mock("../../../../../../../lib/hooks/trace", () => ({
-  useRunTrace: () => ({ data: TRACE, isLoading: false }),
+box.current = TRACE;
+vi.mock("@/lib/hooks/trace", () => ({
+  useRunTrace: () => ({ data: box.current, isLoading: false }),
 }));
-vi.mock("../../../../../../../lib/hooks/reviews", () => ({
+vi.mock("@/lib/hooks/reviews", () => ({
   useRunEvents: () => ({ events: [], running: false }),
 }));
 
@@ -53,10 +58,35 @@ describe("A5 Run Trace drawer (smoke)", () => {
     expect(screen.getByText("$0.060")).toBeInTheDocument();
   });
 
-  it("switches to the live log tab", () => {
+  it("switches to the live log tab", async () => {
+    const user = userEvent.setup();
     renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
-    fireEvent.click(screen.getByText("log"));
+    await user.click(screen.getByText("log"));
     // LiveLogStream renders its filter input
     expect(screen.getByPlaceholderText("Filter log…")).toBeInTheDocument();
+  });
+});
+
+describe("RunTraceDrawer — grounding and optional telemetry", () => {
+  afterEach(() => {
+    box.current = TRACE;
+  });
+
+  it.each([
+    [2, 2, "full"],
+    [1, 2, "partial"],
+    [0, 2, "zero"],
+    [0, 0, "neutral"],
+  ] as const)("colors grounding %i/%i as %s", (kept, total, state) => {
+    box.current = {
+      ...TRACE,
+      stats: { ...TRACE.stats, grounding: `${kept}/${total} passed`, grounding_kept: kept, grounding_total: total, grounding_dropped: total - kept },
+      memory_pulled: [],
+      specs_read: [],
+    };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.getByTestId("grounding-badge")).toHaveAttribute("data-grounding-state", state);
+    expect(screen.queryByText("Memory pulled")).not.toBeInTheDocument();
+    expect(screen.queryByText("Specs read")).not.toBeInTheDocument();
   });
 });

@@ -1,13 +1,16 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { Agent } from "@devdigest/shared";
 import messages from "../../../../../../messages/en/agents.json";
-import { ToastProvider } from "../../../../../lib/toast";
+import { ToastProvider } from "@/lib/toast";
+
+const { updateMutate } = vi.hoisted(() => ({ updateMutate: vi.fn() }));
 
 // Mock the data hooks so the editor renders without a network/query client.
-vi.mock("../../../../../lib/hooks/agents", () => ({
-  useUpdateAgent: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false, data: undefined }),
+vi.mock("@/lib/hooks/agents", () => ({
+  useUpdateAgent: () => ({ mutate: updateMutate, isPending: false, isSuccess: false, data: undefined }),
   useProviderModels: () => ({ data: [{ id: "gpt-4.1", provider: "openai" }] }),
 }));
 
@@ -44,5 +47,31 @@ describe("A2 Agent Editor (smoke)", () => {
     expect(screen.getByText("Config")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
     expect(screen.getByText("Save agent")).toBeInTheDocument();
+  });
+});
+
+describe("AgentEditor — save flow", () => {
+  beforeEach(() => {
+    updateMutate.mockReset();
+  });
+
+  it("editing a field and saving posts the update mutation with the edited payload", async () => {
+    const user = userEvent.setup();
+    renderWithIntl(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
+
+    const nameInput = screen.getByDisplayValue("Security Reviewer");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Pentest Agent");
+    await user.click(screen.getByRole("button", { name: /save agent/i }));
+
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    const [input] = updateMutate.mock.calls[0]!;
+    expect(input.id).toBe("ag1");
+    expect(input.patch).toMatchObject({
+      name: "Pentest Agent",
+      provider: "openai",
+      model: "gpt-4.1",
+      enabled: true,
+    });
   });
 });

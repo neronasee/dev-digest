@@ -9,16 +9,23 @@ async function main() {
   // Graceful shutdown: on SIGTERM/SIGINT close the server, which runs the
   // onClose hooks (drains in-flight requests/SSE, closes the postgres pool).
   // Guarded so a second signal during shutdown doesn't double-close.
+  // Drain window: a client that never releases its connection (e.g. a hung
+  // SSE subscriber) would hang app.close() forever — force-exit after 10s.
+  // The timer is unref'd so it never holds a healthy process open.
   let closing = false;
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, async () => {
       if (closing) return;
       closing = true;
       app.log.info(`${signal} received — shutting down`);
+      const forceExit = setTimeout(() => process.exit(1), 10_000);
+      forceExit.unref();
       try {
         await app.close();
+        clearTimeout(forceExit);
         process.exit(0);
       } catch (err) {
+        clearTimeout(forceExit);
         app.log.error(err, 'error during shutdown');
         process.exit(1);
       }

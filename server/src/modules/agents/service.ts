@@ -14,6 +14,8 @@ import { toAgentDto, toAgentVersionDto } from './helpers.js';
 /**
  * A2 — agents service. Business logic for the Agents tab + Agent Editor.
  * Provider/model selection uses the LLM adapter's dynamic model list.
+ * Service layer only — no HTTP and no SQL here: transport lives in routes.ts,
+ * data access in repository.ts, row ⇄ DTO mapping in helpers.ts.
  *
  * An Agent = provider + model + system_prompt + linked skills + output_schema +
  * enabled. Config changes are versioned via `agent_versions` (repository).

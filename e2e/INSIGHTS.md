@@ -32,6 +32,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-20 — The agent editor route mixes casing: the Config tab's "Configuration" h2 and FormField labels ("System prompt") have no text-transform, but the header's provider/model Badge is CSS-uppercased by the Badge primitive — `wait --text` on the editor must target the h2/labels in DOM casing and never the provider/model badge. (specs/09-agent-editor.flow.json:11, client src/vendor/ui/primitives/Badge.tsx:75)
+- 2026-09-20 — Publishing the throwaway Postgres on `127.0.0.1` only still serves `localhost` URLs: Node's Happy Eyeballs tries `::1` first, fails against the IPv4-only publish, and falls back to `127.0.0.1` (verified empirically with a scratch pgvector container + postgres.js) — so loopback-binding the dev/e2e DB to stop LAN exposure is safe for existing `DATABASE_URL`s. (scripts/e2e.sh:98)
 - 2026-09-17 — agent-browser 0.27 `wait --text` matches the CSS-text-transformed accessible text case-sensitively — header/pill assertions must use the UPPERCASE form ("FINDINGS", "FINDINGS IN THIS RUN", "CRITICAL"), never the DOM-cased source string. (specs/04-pr-findings.flow.json:16, specs/08-pr-list-findings.flow.json:9)
 - 2026-09-17 — `find role <role> … --name` concatenates an element's child spans WITHOUT spaces — the severity pill's accessible name is "Critical1"/"Warning1", and substring names ("Critical", "Critical 1") all fail with "Element not found"; `find label` does not match a plain div's aria-label either, so hoverable non-control cells carry `role="group"` and are located as `find role group hover --name "2 findings"`. (specs/08-pr-list-findings.flow.json:8, client pulls/_components/FindingsCell/FindingsCell.tsx:112)
 - 2026-09-17 — agent-browser clicks dispatch at element coordinates and report "✓ Done" even when the target is below the fold (577px default viewport) — the click silently does nothing; scroll the element into view first (e.g. click the timeline agent name, whose accordion `scrollIntoView`s) before clicking in-page controls. (specs/04-pr-findings.flow.json:15)
@@ -40,7 +42,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-20 — "web never became reachable on :3100" with a wall of `GET / 500` lines means the CLIENT failed to compile — the real error is the `⨯ Module not found` block in the web log ABOVE the 500 spam, not a stack/port problem; reproduce fast with `cd client && pnpm build` (webpack — same resolver as `next dev`), NOT `pnpm test` (vitest resolves `.js`→`.ts` imports natively, so the unit lanes stay green while the app is broken); clearing `client/.next` does not fix real resolution errors. (scripts/e2e.sh:160, client/next.config.mjs)
 
 ## Session Notes
 

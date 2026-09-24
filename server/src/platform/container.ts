@@ -25,6 +25,10 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
+import { PollingRepository } from '../modules/polling/repository.js';
+import { WorkspaceRepository } from '../modules/workspace/repository.js';
+import { SettingsRepository } from '../modules/settings/repository.js';
+import { PullsRepository } from '../modules/pulls/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -148,6 +152,32 @@ export class Container {
       }
     }, estimateCost);
     return this._priceBook;
+  }
+
+  // Wave-1 B5 repositories (polling/workspace/settings) — same lazy-getter
+  // seam as agentsRepo/reviewRepo: the modules' routes/services/feature-models
+  // resolve them through the container instead of newsing them up ad hoc.
+  private _pollingRepo?: PollingRepository;
+  private _workspaceRepo?: WorkspaceRepository;
+  private _settingsRepo?: SettingsRepository;
+  private _pullsRepo?: PullsRepository;
+
+  get pollingRepo(): PollingRepository {
+    return (this._pollingRepo ??= new PollingRepository(this.db));
+  }
+
+  get workspaceRepo(): WorkspaceRepository {
+    return (this._workspaceRepo ??= new WorkspaceRepository(this.db));
+  }
+
+  get settingsRepo(): SettingsRepository {
+    return (this._settingsRepo ??= new SettingsRepository(this.db));
+  }
+
+  /** Pulls data layer (pull_requests / pr_files / pr_commits) — the pulls
+   *  module's service consumes it (B1). */
+  get pullsRepo(): PullsRepository {
+    return (this._pullsRepo ??= new PullsRepository(this.db));
   }
 
   async github(): Promise<GitHubClient> {

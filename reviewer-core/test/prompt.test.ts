@@ -55,12 +55,29 @@ describe('assemblePrompt — ## PR description', () => {
     );
   });
 
-  it('truncates a huge body to the 4k cap', () => {
-    const { assembly } = assemblePrompt({
+  it('truncates a huge body to the 4k cap and marks the cut (marker iff truncation)', () => {
+    const marker = '[description truncated at 4000 chars]';
+    const truncated = assemblePrompt({
       system: 'sys',
       diff: 'D',
       prDescription: 'x'.repeat(10_000),
     });
-    expect((assembly.pr_description as string).length).toBe(4000);
+    const desc = truncated.assembly.pr_description as string;
+    // 4000 chars of body + the marker line — nothing else.
+    expect(desc.length).toBe(4000 + `\n${marker}`.length);
+    expect(desc.endsWith(`\n${marker}`)).toBe(true);
+    // the marker sits INSIDE the untrusted-wrapped block of the user message
+    expect(truncated.messages[1]!.content).toContain(
+      `<untrusted source="pr-description">\n${'x'.repeat(4000)}\n${marker}\n</untrusted>`,
+    );
+
+    // iff: no marker when the body fits — under the cap …
+    const fits = assemblePrompt({ system: 'sys', diff: 'D', prDescription: 'short body' });
+    expect(fits.assembly.pr_description).not.toContain('[description truncated');
+    expect(fits.messages[1]!.content).not.toContain('[description truncated');
+    // … and exactly AT the cap (truncation did not occur).
+    const exact = assemblePrompt({ system: 'sys', diff: 'D', prDescription: 'y'.repeat(4000) });
+    expect(exact.assembly.pr_description).toBe('y'.repeat(4000));
+    expect(exact.assembly.pr_description).not.toContain('[description truncated');
   });
 });

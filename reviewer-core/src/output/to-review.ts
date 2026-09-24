@@ -1,5 +1,12 @@
 import type { CiFailOn, Finding, GitHubReviewPayload, Review, UnifiedDiff } from '@devdigest/shared';
 import { buildLineIndex } from '../grounding.js';
+import {
+  countBlockers,
+  FAIL_ON_MIN_RANK,
+  gateTriggered,
+  outcomeFromFindings,
+  SEVERITY_RANK,
+} from '../review/outcome.js';
 
 /**
  * Turn a grounded Review into a GitHubReviewPayload (markdown body + optional
@@ -20,35 +27,10 @@ const SEV_EMOJI: Record<string, string> = {
 };
 
 /** Severity rank (higher = worse) for gate comparisons. */
-export const SEV_RANK: Record<string, number> = { SUGGESTION: 1, WARNING: 2, CRITICAL: 3 };
+export const SEV_RANK = SEVERITY_RANK;
 
 /** Minimum severity rank that trips the gate, per policy. `never` → unreachable. */
-export const FAIL_ON_MIN_RANK: Record<CiFailOn, number> = {
-  never: Number.POSITIVE_INFINITY,
-  critical: 3,
-  warning: 2,
-  any: 1,
-};
-
-/**
- * Does this set of findings trip the CI gate under `failOn`? True → the review
- * should REQUEST_CHANGES and the CI check should fail.
- */
-export function gateTriggered(findings: Finding[], failOn: CiFailOn): boolean {
-  const min = FAIL_ON_MIN_RANK[failOn];
-  return findings.some((f) => (SEV_RANK[f.severity] ?? 0) >= min);
-}
-
-/**
- * How many findings trip the gate under `failOn` (severity rank ≥ the gate
- * minimum). This is the "blockers" count surfaced on the run row and the PR
- * list rollup — the deterministic signal the UI colors on, NOT the model's
- * self-reported verdict. `never` → always 0.
- */
-export function countBlockers(findings: Finding[], failOn: CiFailOn): number {
-  const min = FAIL_ON_MIN_RANK[failOn];
-  return findings.reduce((n, f) => n + ((SEV_RANK[f.severity] ?? 0) >= min ? 1 : 0), 0);
-}
+export { FAIL_ON_MIN_RANK, gateTriggered, countBlockers };
 
 export interface ToReviewOptions {
   /** Emit one inline comment per finding (default true). */
@@ -153,12 +135,9 @@ export function toReviewPayload(review: Review, opts: ToReviewOptions = {}): Git
   const comments = inline ? inlineComments(review.findings, lineIndex) : [];
   // Deterministic event from severities + gate policy (ignores model verdict):
   // no findings → APPROVE; gate tripped → REQUEST_CHANGES; otherwise → COMMENT.
+  const verdict = outcomeFromFindings(review.findings, failOn);
   const event: GitHubReviewPayload['event'] =
-    review.findings.length === 0
-      ? 'APPROVE'
-      : gateTriggered(review.findings, failOn)
-        ? 'REQUEST_CHANGES'
-        : 'COMMENT';
+    verdict === 'approve' ? 'APPROVE' : verdict === 'request_changes' ? 'REQUEST_CHANGES' : 'COMMENT';
   return {
     body: composeBody(review.findings, event, title),
     event,

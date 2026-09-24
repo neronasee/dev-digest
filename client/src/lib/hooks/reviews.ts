@@ -6,25 +6,20 @@ import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
 import { notify } from "../toast";
+import { RunEvent } from "@devdigest/shared";
 import type {
   FindingActionKind,
   PrReviewComment,
   ReviewRecord,
   ReviewRunResponse,
-  RunEvent,
   RunSummary,
+  ActiveRunSummary,
 } from "@devdigest/shared";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
-export interface ActiveRun {
-  run_id: string;
-  agent_id: string | null;
-  agent_name: string | null;
-  ran_at: string | null;
-}
+export type ActiveRun = ActiveRunSummary;
 
-/** In-flight runs for a PR, from the server (agent_runs where status='running').
-   Survives reloads/devices; polls while anything is running so it self-clears. */
+/** Active queued/running runs for a PR. Survives reloads/devices. */
 export function usePrActiveRuns(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["pr-active-runs", prId],
@@ -43,7 +38,7 @@ export function usePrRuns(prId: string | null | undefined) {
     queryFn: () => api.get<RunSummary[]>(`/pulls/${prId}/runs`),
     enabled: !!prId,
     refetchInterval: (query) =>
-      (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
+      (query.state.data ?? []).some((r) => r.status === "queued" || r.status === "running") ? 4000 : false,
   });
 }
 
@@ -181,12 +176,16 @@ export function useRunEvents(runIds: string[]) {
       const es = new EventSource(`${API_BASE}/runs/${runId}/events`);
       const onMsg = (ev: MessageEvent) => {
         try {
-          const parsed = JSON.parse(ev.data) as RunEvent;
-          setEvents((prev) => [...prev, parsed]);
+          const raw: unknown = JSON.parse(ev.data);
+          const parsed = RunEvent.safeParse(raw);
+          // Frames that don't match the contract (partial/foreign/keepalive
+          // payloads) are dropped instead of trusted as RunEvents.
+          if (!parsed.success) return;
+          setEvents((prev) => [...prev, parsed.data]);
           // Runtime agent failures arrive as SSE `error` events (not as a
           // mutation/query error), so the global error toast never sees them —
           // surface them here so the user gets a notification without a reload.
-          if (parsed.kind === "error" && parsed.msg) notify.error(parsed.msg);
+          if (parsed.data.kind === "error" && parsed.data.msg) notify.error(parsed.data.msg);
         } catch {
           /* ignore non-JSON keepalive frames (and dataless native error events) */
         }

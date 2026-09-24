@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React from "react";
 import { Icon, Avatar, Badge, Button, Tabs } from "@devdigest/ui";
 import { RunReviewDropdown } from "../RunReviewDropdown";
 import { s } from "./styles";
@@ -10,7 +10,7 @@ interface PrDetailHeaderProps {
   pr: PrDetail;
   prId: string | null;
   tab: string;
-  findingsCount: number;
+  runsCount: number;
   /** github.com PR URL; null when the repo's full_name isn't known yet. */
   githubUrl?: string | null;
   onSetTab: (tab: string) => void;
@@ -22,20 +22,12 @@ export function PrDetailHeader({
   pr,
   prId,
   tab,
-  findingsCount,
+  runsCount,
   githubUrl,
   onSetTab,
   onRunStart,
   onRunsStarted,
 }: PrDetailHeaderProps) {
-  const handleRunStart = useCallback(() => {
-    onRunStart();
-  }, [onRunStart]);
-
-  const handleRunsStarted = useCallback(() => {
-    onRunsStarted();
-  }, [onRunsStarted]);
-
   const statusColor =
     pr.status === "merged"
       ? "var(--ok)"
@@ -93,8 +85,8 @@ export function PrDetailHeader({
             <RunReviewDropdown
               prId={prId}
               warnMerged={pr.status === "merged" || pr.status === "closed"}
-              onRunStart={handleRunStart}
-              onRunsStarted={handleRunsStarted}
+              onRunStart={onRunStart}
+              onRunsStarted={onRunsStarted}
             />
           )}
         </div>
@@ -114,7 +106,7 @@ export function PrDetailHeader({
         pad="0"
         tabs={[
           { key: "overview", label: "Overview", icon: "FileText" },
-          { key: "findings", label: "Agent runs", icon: "AlertOctagon", count: findingsCount || undefined },
+          { key: "findings", label: "Agent runs", icon: "AlertOctagon", count: runsCount || undefined },
           { key: "diff", label: "Files changed", icon: "Code", count: pr.files_count },
         ]}
       />

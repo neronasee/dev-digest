@@ -44,6 +44,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Vendored shared contracts must stay byte-identical server↔client
+      # (docs/improvement-plan-2026-09-19.md, X1). This workflow is
+      # path-filtered to client/**, so it catches client-side drift;
+      # server-unit.yml carries the same gate for server-side drift.
+      - name: Vendored shared in sync
+        run: diff -rq ../server/src/vendor/shared src/vendor/shared
+
       - run: pnpm typecheck
 
       - run: pnpm test

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, jsonb, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, jsonb, unique, primaryKey } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 
 // ============================================================ Tenancy & core
@@ -43,6 +43,12 @@ export const settings = pgTable(
     value: jsonb('value'),
   },
   (t) => ({
-    uq: uniqueIndex('settings_ws_user_key_uq').on(t.workspaceId, t.userId, t.key),
+    // UNIQUE as a table constraint with NULLS NOT DISTINCT: user_id is
+    // nullable (workspace-level settings), and Postgres treats NULLs as
+    // distinct under a plain unique INDEX — so onConflictDoUpdate never fired
+    // for workspace-level rows. NULLS NOT DISTINCT makes (ws, NULL, key)
+    // collide like any other duplicate. (Constraint, not uniqueIndex:
+    // drizzle-orm/drizzle-kit only support nullsNotDistinct on constraints.)
+    uq: unique('settings_ws_user_key_uq').on(t.workspaceId, t.userId, t.key).nullsNotDistinct(),
   }),
 );

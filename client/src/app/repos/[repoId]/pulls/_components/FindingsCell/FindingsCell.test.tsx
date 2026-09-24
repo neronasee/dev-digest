@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import type { FindingPreview } from "@devdigest/shared";
 import messages from "../../../../../../../messages/en/prReview.json";
@@ -17,6 +18,11 @@ afterEach(() => {
   cleanup();
   vi.clearAllTimers();
 });
+
+/** userEvent wired to the file's fake timers (the cell opens/closes on delays). */
+function setupUser() {
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+}
 
 const PREVIEWS: FindingPreview[] = [
   {
@@ -51,9 +57,9 @@ function renderCell(findings: FindingPreview[] = PREVIEWS) {
   );
 }
 
-/** mouseEnter → the 100ms hover-intent delay → popover open. */
-function hoverOpen() {
-  fireEvent.mouseEnter(screen.getByLabelText("2 findings"));
+/** pointer onto the cell → the 100ms hover-intent delay → popover open. */
+async function hoverOpen(user: ReturnType<typeof setupUser>) {
+  await user.hover(screen.getByLabelText("2 findings"));
   act(() => {
     vi.advanceTimersByTime(100);
   });
@@ -68,16 +74,18 @@ describe("FindingsCell — empty state", () => {
 });
 
 describe("FindingsCell — hover popover", () => {
-  it("opens after the hover delay with the N FINDINGS IN THIS RUN header", () => {
+  it("opens after the hover delay with the N FINDINGS IN THIS RUN header", async () => {
+    const user = setupUser();
     renderCell();
     expect(screen.queryByText(/findings in this run/i)).not.toBeInTheDocument();
-    hoverOpen();
+    await hoverOpen(user);
     expect(screen.getByText("2 findings in this run")).toBeInTheDocument();
   });
 
-  it("previews each finding read-only: title, file:line, confidence, rationale — no buttons", () => {
+  it("previews each finding read-only: title, file:line, confidence, rationale — no buttons", async () => {
+    const user = setupUser();
     renderCell();
-    hoverOpen();
+    await hoverOpen(user);
     expect(screen.getByText("Hardcoded Stripe secret key in commit")).toBeInTheDocument();
     expect(screen.getByText("N+1 query in user list endpoint")).toBeInTheDocument();
     expect(screen.getByText("src/config.ts:12")).toBeInTheDocument();
@@ -86,38 +94,40 @@ describe("FindingsCell — hover popover", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("closes after the leave delay, unless the cursor moves into the popover", () => {
+  it("closes after the leave delay, unless the cursor moves into the popover", async () => {
+    const user = setupUser();
     renderCell();
-    hoverOpen();
+    await hoverOpen(user);
 
     // Leaving the cell schedules a close; entering the popover cancels it.
-    fireEvent.mouseLeave(screen.getByLabelText("2 findings"));
-    fireEvent.mouseEnter(screen.getByText("2 findings in this run"));
+    await user.hover(screen.getByText("2 findings in this run"));
     act(() => {
       vi.advanceTimersByTime(140);
     });
     expect(screen.getByText("2 findings in this run")).toBeInTheDocument();
 
     // Leaving the popover itself closes it.
-    fireEvent.mouseLeave(screen.getByText("2 findings in this run"));
+    await user.unhover(screen.getByText("2 findings in this run"));
     act(() => {
       vi.advanceTimersByTime(140);
     });
     expect(screen.queryByText(/findings in this run/i)).not.toBeInTheDocument();
   });
 
-  it("opens on keyboard focus and closes on Escape", () => {
+  it("opens on keyboard focus and closes on Escape", async () => {
+    const user = setupUser();
     renderCell();
-    const cell = screen.getByLabelText("2 findings");
-    fireEvent.focus(cell);
+    // The cell is the only tabbable element until the (button-free) popover opens.
+    await user.tab();
     expect(screen.getByText("2 findings in this run")).toBeInTheDocument();
-    fireEvent.keyDown(cell, { key: "Escape" });
+    await user.keyboard("{Escape}");
     expect(screen.queryByText(/findings in this run/i)).not.toBeInTheDocument();
   });
 
-  it("scrolling INSIDE the popover (reading its list) keeps it open", () => {
+  it("scrolling INSIDE the popover (reading its list) keeps it open", async () => {
+    const user = setupUser();
     renderCell();
-    hoverOpen();
+    await hoverOpen(user);
     const popover = screen.getByText("2 findings in this run").closest("div");
     expect(popover).toBeTruthy();
     // A scroll event whose target is the popover itself is reading, not navigation.
@@ -125,9 +135,10 @@ describe("FindingsCell — hover popover", () => {
     expect(screen.getByText("2 findings in this run")).toBeInTheDocument();
   });
 
-  it("scrolling the page with the row out of view closes the popover", () => {
+  it("scrolling the page with the row out of view closes the popover", async () => {
+    const user = setupUser();
     renderCell();
-    hoverOpen();
+    await hoverOpen(user);
     // Row scrolled out of the viewport → nothing left to anchor to.
     const rectSpy = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")

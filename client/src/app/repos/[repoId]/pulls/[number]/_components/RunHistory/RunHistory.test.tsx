@@ -29,9 +29,12 @@ function run(o: Partial<RunSummary>): RunSummary {
     cost_usd: 0.0013,
     findings_count: 0,
     grounding: "0/0 passed",
+    grounding_dropped: 0,
     ran_at: "2026-06-11T18:44:34.000Z",
+    started_at: "2026-06-11T18:44:35.000Z",
     score: null,
     blockers: null,
+    verdict: "approve",
     ...o,
   };
 }
@@ -46,7 +49,7 @@ function renderRuns(runs: RunSummary[], severityByRun?: Record<string, SeverityC
 
 describe("RunHistory — outcome badge", () => {
   it("a done run WITH blockers reads 'rejected' (never green 'done') + shows the score ring", () => {
-    renderRuns([run({ status: "done", findings_count: 5, blockers: 5, score: 0 })]);
+    renderRuns([run({ status: "done", findings_count: 5, blockers: 5, score: 0, verdict: "request_changes" })]);
     expect(screen.getByText("rejected")).toBeInTheDocument();
     expect(screen.queryByText("done")).not.toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument(); // CircularScore renders the number
@@ -60,7 +63,7 @@ describe("RunHistory — outcome badge", () => {
   });
 
   it("a done run with non-blocking findings reads 'reviewed'", () => {
-    renderRuns([run({ status: "done", findings_count: 3, blockers: 0, score: 72 })]);
+    renderRuns([run({ status: "done", findings_count: 3, blockers: 0, score: 72, verdict: "comment" })]);
     expect(screen.getByText("reviewed")).toBeInTheDocument();
     expect(screen.queryByText(/blockers/)).not.toBeInTheDocument();
   });
@@ -73,6 +76,16 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+
+  it("a queued run reads 'queued' and uses enqueue time", () => {
+    renderRuns([run({ status: "queued", started_at: null, ran_at: "2026-06-11T18:44:34.000Z", verdict: null })]);
+    expect(screen.getByText("queued")).toBeInTheDocument();
+  });
+
+  it("persisted verdict wins over stale blocker/count heuristics", () => {
+    renderRuns([run({ status: "done", verdict: "approve", blockers: 9, findings_count: 9 })]);
+    expect(screen.getByText("approved")).toBeInTheDocument();
   });
 });
 
@@ -97,7 +110,7 @@ describe("RunHistory — run meta line (tokens + cost)", () => {
 describe("RunHistory — severity pills (display-only)", () => {
   it("a settled run shows its per-severity icon+count pills", () => {
     renderRuns(
-      [run({ run_id: "run-1", status: "done", findings_count: 3, blockers: 1, score: 72 })],
+      [run({ run_id: "run-1", status: "done", findings_count: 3, blockers: 1, score: 72, verdict: "request_changes" })],
       { "run-1": { CRITICAL: 2, WARNING: 1, SUGGESTION: 0 } },
     );
     // Compact badges render icon + count only ("2" and "1" are unique in this
@@ -110,7 +123,7 @@ describe("RunHistory — severity pills (display-only)", () => {
 
   it("pills are not interactive — the tile stays non-clickable", () => {
     renderRuns(
-      [run({ run_id: "run-1", status: "done", findings_count: 2, blockers: 0, score: 88 })],
+      [run({ run_id: "run-1", status: "done", findings_count: 2, blockers: 0, score: 88, verdict: "comment" })],
       { "run-1": { CRITICAL: 2, WARNING: 0, SUGGESTION: 0 } },
     );
     // Only interactive elements in the tile are the agent-name button and the

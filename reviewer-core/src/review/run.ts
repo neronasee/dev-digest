@@ -6,10 +6,12 @@ import type {
   RunEventKind,
   UnifiedDiff,
 } from '@devdigest/shared';
-import { Review as ReviewSchema } from '@devdigest/shared';
+import { Review as ReviewSchema, UnifiedDiff as UnifiedDiffSchema } from '@devdigest/shared';
 import { assemblePrompt } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
+import { outcomeFromFindings } from './outcome.js';
+import type { CiFailOn } from '@devdigest/shared';
 
 /**
  * reviewPullRequest — the review engine entry point.
@@ -50,8 +52,10 @@ export interface ReviewInput {
   diff: UnifiedDiff;
   /** Injected LLM provider (OpenRouter in CI, OpenAI/Anthropic in the studio). */
   llm: LLMProvider;
-  /** 'auto' (default) picks single-pass unless the diff is large + multi-file. */
+  /** Review strategy. Omitted means deliberate single-pass. */
   strategy?: ReviewStrategy;
+  /** Severity gate used for the deterministic verdict (default critical). */
+  ciFailOn?: CiFailOn;
   /** Resolved skill bodies (NOT slugs). */
   skills?: string[];
   /** Curated memory items. */
@@ -99,6 +103,8 @@ export interface ReviewOutcome {
   grounding: string;
   /** Findings dropped by grounding, with reasons (for logs / "never go silent"). */
   dropped: { finding: Finding; reason: string }[];
+  /** Explicit count for persistence/telemetry consumers. */
+  groundingDropped: number;
   /** Which path ran. */
   mode: ReviewMode;
   /** Prompt assembly (for the run trace). Single-pass: the one call; map-reduce: the whole-diff assembly. */
@@ -121,9 +127,24 @@ function selectMode(strategy: ReviewStrategy, diff: UnifiedDiff, threshold: numb
 }
 
 export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutcome> {
+  // Contract gate (R12): validate the diff ONCE, here at the entry point, and
+  // run on the PARSED value. Grounding trusts hunk metadata (`newStart`,
+  // `newLineNumbers`); a malformed hunk that slips past the type system
+  // (unvalidated JSON from persistence or an API) used to silently degrade
+  // grounding — now it fails loudly BEFORE any mode selection or LLM call.
+  // In-process safeParse: no I/O, so the engine stays pure.
+  const diffParsed = UnifiedDiffSchema.safeParse(input.diff);
+  if (!diffParsed.success) {
+    const issues = diffParsed.error.issues
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ');
+    throw new Error(`Invalid UnifiedDiff rejected at review entry: ${issues}`);
+  }
+  const diff = diffParsed.data;
+
   const threshold = input.mapThresholdLines ?? DEFAULT_MAP_THRESHOLD_LINES;
   const maxRetries = input.maxRetries ?? DEFAULT_REVIEW_MAX_RETRIES;
-  const mode = selectMode(input.strategy ?? 'auto', input.diff, threshold);
+  const mode = selectMode(input.strategy ?? 'single-pass', diff, threshold);
   const emit = (kind: RunEventKind, msg: string, data?: unknown) =>
     input.onEvent?.({ kind, msg, data });
 
@@ -139,18 +160,18 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   };
 
   // Whole-diff assembly is the trace default; overwritten below for single-pass.
-  let assembly: PromptAssembly = assemblePrompt({ ...promptParts, diff: input.diff.raw }).assembly;
+  let assembly: PromptAssembly = assemblePrompt({ ...promptParts, diff: diff.raw }).assembly;
 
   const chunks =
     mode === 'map-reduce'
-      ? input.diff.files.map((f) => ({ label: f.path, diffText: sliceDiff(input.diff, f.path) }))
-      : [{ label: 'all files', diffText: input.diff.raw }];
+      ? diff.files.map((f) => ({ label: f.path, diffText: sliceDiff(diff, f.path) }))
+      : [{ label: 'all files', diffText: diff.raw }];
 
   emit(
     'info',
     mode === 'map-reduce'
-      ? `Large diff → map-reduce over ${input.diff.files.length} files`
-      : `Reviewing ${input.diff.files.length} changed file(s) in one pass`,
+      ? `Large diff → map-reduce over ${diff.files.length} files`
+      : `Reviewing ${diff.files.length} changed file(s) in one pass`,
   );
 
   const partials: Review[] = [];
@@ -194,20 +215,34 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
   );
 
   // SHARED citation-grounding gate (the only post-step; not duplicated per strategy).
-  const ground = groundFindings(merged.findings, input.diff);
+  const ground = groundFindings(merged.findings, diff);
   const grounding = groundingSummary(ground);
   for (const d of ground.dropped) {
     emit('info', `grounding dropped "${d.finding.title}": ${d.reason}`);
+  }
+  for (const rewrite of ground.rewritten) {
+    emit('info', `grounding rewrote "${rewrite.finding.title}" path: '${rewrite.from}' → '${rewrite.to}'`);
   }
   emit('result', `Citation grounding: ${grounding}`);
 
   // Score is derived from the findings that SURVIVED grounding (not the model's
   // self-reported number, and not the pre-grounding set) so the score, the
   // findings list, and the deterministic event always agree.
+  const summary = ground.dropped.length === 0
+    ? merged.summary
+    : ground.kept.length === 0
+      ? 'No grounded findings.'
+      : `${ground.kept.length} grounded finding${ground.kept.length === 1 ? '' : 's'}: ${ground.kept.map((finding) => finding.title).join('; ')}.`;
   return {
-    review: { ...merged, findings: ground.kept, score: scoreFromFindings(ground.kept) },
+    review: {
+      findings: ground.kept,
+      verdict: outcomeFromFindings(ground.kept, input.ciFailOn ?? 'critical'),
+      score: scoreFromFindings(ground.kept),
+      summary,
+    },
     grounding,
     dropped: ground.dropped,
+    groundingDropped: ground.dropped.length,
     mode,
     assembly,
     chunks: chunks.map((c) => ({ label: c.label })),

@@ -1,0 +1,47 @@
+{
+  "skill_name": "pr-self-review",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "client-only-changes",
+      "prompt": "I'm about to open a PR for my current work — run the pre-PR check on my local changes before I do",
+      "expected_output": "Report reviews only the seeded client/ changes (PageShell.tsx: prop-sync useEffect + hardcoded copy), engages frontend lenses (react-best-practices / next-best-practices / frontend-architecture), engages NO backend skills, runs client typecheck+test, findings cite PageShell.tsx line ranges, verdict matches the findings table",
+      "files": ["client/src/components/page-shell/PageShell.tsx"],
+      "assertions": [
+        "client-lenses-engaged: report names at least one of frontend-architecture / react-best-practices / next-best-practices as applied to the client change",
+        "no-backend-lenses-on-client-diff: report does not name onion-architecture / fastify-best-practices / drizzle-orm-patterns / postgresql-table-design as engaged",
+        "only-vendored-severities: severity labels used are exactly CRITICAL / WARNING / SUGGESTION (no major/minor/info inventions)",
+        "verdict-matches-findings-table: stated verdict is BLOCK iff the report lists at least one CRITICAL finding, else PASS",
+        "findings-cite-page-shell: at least one finding cites client/src/components/page-shell/PageShell.tsx with a line range",
+        "client-mechanical-checks-evidenced: report shows client typecheck and/or test executed, or an explicit note why skipped"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "lockfile-invariant-block",
+      "prompt": "check my local changes before I open the PR — don't let me merge anything broken",
+      "expected_output": "Invariant C2 fires: CRITICAL finding citing server/pnpm-lock.yaml (lockfile edited without package.json), verdict BLOCK, report explicitly says not to open/merge the PR, no PR-opening assistance offered",
+      "files": ["server/pnpm-lock.yaml"],
+      "assertions": [
+        "verdict-is-block: final verdict explicitly states BLOCK (do not open/merge)",
+        "critical-cites-lockfile: at least one CRITICAL finding cites server/pnpm-lock.yaml",
+        "no-merge-assistance: response contains no offer to open, create, or push the PR",
+        "fix-then-rerun-guidance: response instructs to fix the critical issue and re-run the check"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "backend-route-violation",
+      "prompt": "перевір мої локальні зміни перед відкриттям PR",
+      "expected_output": "Report engages fastify-best-practices and/or onion-architecture on the seeded settings/routes.ts change, at least one finding cites server/src/modules/settings/routes.ts with grounded line numbers (hand-rolled SettingsUpdate.parse in handler), verdict matches findings table, server typecheck+unit+depcruise attempted",
+      "files": ["server/src/modules/settings/routes.ts"],
+      "assertions": [
+        "backend-lenses-engaged: report names fastify-best-practices and/or onion-architecture as applied to the server change",
+        "finding-cites-route-file: at least one finding cites server/src/modules/settings/routes.ts with line numbers",
+        "handrolled-parse-flagged: a finding addresses the hand-rolled SettingsUpdate.parse(req.body) inside the handler (route doing validation the type provider should own)",
+        "only-vendored-severities: severity labels used are exactly CRITICAL / WARNING / SUGGESTION",
+        "verdict-matches-findings-table: stated verdict is BLOCK iff the report lists at least one CRITICAL finding, else PASS"
+      ]
+    }
+  ]
+}

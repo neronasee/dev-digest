@@ -65,6 +65,12 @@ jobs:
 
       - run: pnpm typecheck
 
+      # Onion-architecture gate (see .claude/skills/onion-architecture/):
+      # dependency-cruiser is already a runtime dep, so nothing extra to
+      # install. Errors fail the build; warnings are the tracked burn-down
+      # baseline in the skill's enforcement.md.
+      - run: pnpm depcruise:all
+
   unit:
     name: tests
     runs-on: ubuntu-latest

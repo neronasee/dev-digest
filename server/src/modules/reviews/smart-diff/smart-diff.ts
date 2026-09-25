@@ -13,8 +13,8 @@ export type SmartDiffFindingInput = { file: string; start_line: number };
 
 /**
  * Build the SmartDiff for a PR:
- *  - files grouped per `classifyFile` in `SMART_DIFF_ROLE_ORDER` (empty groups
- *    omitted; input order preserved within a group);
+ *  - all five roles emitted in `SMART_DIFF_ROLE_ORDER` (including zero-file
+ *    groups; input order preserved within a group);
  *  - per file, `finding_lines` = sorted, deduped `start_line`s of findings
  *    whose `file` equals the path — findings on files not among the inputs are
  *    ignored for line marking (they cannot anchor anywhere);
@@ -44,8 +44,7 @@ export function buildSmartDiff(
 
   const groups: SmartDiffGroup[] = [];
   for (const role of SMART_DIFF_ROLE_ORDER) {
-    const bucket = buckets.get(role);
-    if (!bucket || bucket.length === 0) continue; // empty groups omitted
+    const bucket = buckets.get(role) ?? [];
     groups.push({
       role,
       files: bucket.map(

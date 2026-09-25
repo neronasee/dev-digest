@@ -114,7 +114,7 @@ d('GET /pulls/:id/smart-diff (Testcontainers pg)', () => {
     await pg?.stop();
   });
 
-  it('groups pr_files by role in order, omits empty groups, marks only the newest review\'s findings', async () => {
+  it('groups pr_files by role in order, includes empty groups, marks only the newest review\'s findings', async () => {
     const pr = await setupSmartDiffPr(pg.handle.db, workspaceId);
     // An OLDER review whose findings must NOT show (pinned newest-review set).
     await insertReviewWithFindings(pg.handle.db, workspaceId, pr.id, new Date('2026-09-01T10:00:00Z'), [
@@ -132,7 +132,7 @@ d('GET /pulls/:id/smart-diff (Testcontainers pg)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as SmartDiff;
 
-    // Role order, only non-empty groups (all five roles are present here).
+    // Role order (all five roles are present here).
     expect(body.groups.map((g) => g.role)).toEqual(['core', 'tests', 'wiring', 'docs', 'boilerplate']);
     const byRole = new Map(body.groups.map((g) => [g.role, g.files.map((f) => f.path)]));
     expect(byRole.get('core')).toEqual(['src/pay.ts']);
@@ -185,8 +185,13 @@ d('GET /pulls/:id/smart-diff (Testcontainers pg)', () => {
     const res = await app.inject({ method: 'GET', url: `/pulls/${solo!.id}/smart-diff` });
     expect(res.statusCode).toBe(200);
     const body = res.json() as SmartDiff;
-    expect(body.groups).toHaveLength(1);
-    expect(body.groups[0]!.role).toBe('boilerplate');
+    expect(body.groups.map((group) => [group.role, group.files.length])).toEqual([
+      ['core', 0],
+      ['tests', 0],
+      ['wiring', 0],
+      ['docs', 0],
+      ['boilerplate', 1],
+    ]);
     expect(body.split_suggestion).toEqual({ too_big: false, total_lines: 1, proposed_splits: [] });
   });
 

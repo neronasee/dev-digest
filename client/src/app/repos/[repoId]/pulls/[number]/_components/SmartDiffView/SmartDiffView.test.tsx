@@ -2,7 +2,8 @@
  * Smart Diff P1 surface, through the REAL hooks (fetch stubbed per the house
  * rule): role groups with labels + counts, collapse defaults (docs +
  * boilerplate collapsed), the "N with findings" group counter, the file-card
- * dot, the inline FindingComment under the RIGHT line behind Show comments,
+ * dot, the inline FindingComment under the RIGHT line (auto-revealed with the
+ * findings; an explicit Hide wins),
  * the Original order toggle, the no-review empty state, and the resilient
  * plain-DiffViewer fallback when the smart-diff endpoint fails.
  */
@@ -167,17 +168,14 @@ describe("SmartDiffView (via DiffTab, real hooks)", () => {
     expect(screen.getByText("pnpm-lock.yaml")).toBeInTheDocument();
   });
 
-  it("renders the inline FindingComment under the RIGHT line behind Show comments, with the severity label on the line", async () => {
+  it("auto-reveals the inline FindingComment under the RIGHT line once findings arrive; an explicit hide wins afterwards", async () => {
     vi.stubGlobal("fetch", stubFetch());
     const user = userEvent.setup();
     renderTab();
 
     await screen.findByTitle("2 finding-lines");
-    // Hidden by default (same gate as GitHub threads) — but the line is marked.
-    expect(screen.queryByText("Off-by-one in the loop bound")).not.toBeInTheDocument();
-    expect(screen.getByText("blocker")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /show comments/i }));
+    // Findings AUTO-reveal the comment layer (a "Show comments (0)" gate made
+    // the review's own output undiscoverable) — no click needed.
     const label = screen.getByText("blocker");
     const lineWrap = label.closest("div")!.parentElement!;
     expect(within(lineWrap).getByText("Off-by-one in the loop bound")).toBeInTheDocument();
@@ -187,8 +185,17 @@ describe("SmartDiffView (via DiffTab, real hooks)", () => {
     // f2 (line 99 isn't in the patch) lands in the unanchored footer instead
     // of vanishing — and only ONE line is severity-marked.
     expect(screen.getByText("Unanchored drift")).toBeInTheDocument();
-    expect(screen.getByText(/on lines not in this patch/i)).toBeInTheDocument();
     expect(screen.getAllByText("blocker")).toHaveLength(1);
+
+    // The toggle reads Hide (comments (0) · 2 findings — both counters) and an
+    // explicit hide sticks: comments AND findings disappear, the marks stay.
+    const toggle = screen.getByRole("button", { name: /hide comments/i });
+    expect(toggle.textContent).toContain("(0)");
+    expect(toggle.textContent).toContain("2 findings");
+    await user.click(toggle);
+    expect(screen.queryByText("Off-by-one in the loop bound")).not.toBeInTheDocument();
+    expect(screen.queryByText(/on lines not in this patch/i)).not.toBeInTheDocument();
+    expect(screen.getByText("blocker")).toBeInTheDocument();
   });
 
   it("Original order toggle swaps to the plain viewer and back", async () => {

@@ -99,7 +99,10 @@
     },
     "unanchoredTitle": "{count, plural, one {# finding on lines not in this patch} other {# findings on lines not in this patch}}",
     "reviewNotRunTitle": "No review yet",
-    "reviewNotRunBody": "Run a review to see its findings inline in the diff."
+    "reviewNotRunBody": "Run a review to see its findings inline in the diff.",
+    "showComments": "Show comments",
+    "hideComments": "Hide comments",
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}"
   },
   "list": {
     "breadcrumb": "Pull Requests",

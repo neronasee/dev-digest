@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   FindingRecord,
   ActiveRunSummary,
+  IntentFeedbackInput,
+  PrIntentDetail,
   ReviewRecord,
   ReviewRunResponse,
   RunRequest,
@@ -36,6 +38,11 @@ const ReviewsResponse = z.array(ReviewRecord);
 /** POST /findings/:id/(accept|dismiss) — the acted-on finding (shared FindingRecord). */
 const FindingActionResponse = z.object({ finding: FindingRecord });
 
+/** GET/POST /pulls/:id/intent, PUT …/intent/feedback — the shared PrIntentDetail. */
+const IntentResponse = PrIntentDetail;
+/** Handler DTO derived from the SAME schema as `response` (INSIGHTS 2026-09-20). */
+type IntentDto = z.infer<typeof IntentResponse>;
+
 /**
  * reviews module.
  *   POST   /pulls/:id/review  {agentId} | {all:true}  → run review(s); returns runs
@@ -43,6 +50,9 @@ const FindingActionResponse = z.object({ finding: FindingRecord });
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
+ *   GET    /pulls/:id/intent                           → the stored PR intent (404 until derived)
+ *   POST   /pulls/:id/intent                           → (re-)derive the PR intent now
+ *   PUT    /pulls/:id/intent/feedback                  → record correct/incorrect + note
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
 export default async function reviewsRoutes(appBase: FastifyInstance) {
@@ -187,6 +197,41 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.reviewsForPull(workspaceId, req.params.id);
+    },
+  );
+
+  // ---- PR intent (Intent Layer) --------------------------------------------
+  // The stored derivation; 404 until a review round (or POST below) derives one.
+  app.get(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams, response: { 200: IntentResponse } } },
+    async (req): Promise<IntentDto> => {
+      const { workspaceId } = await getContext(container, req);
+      return service.getIntent(workspaceId, req.params.id);
+    },
+  );
+
+  // Manual (re-)derivation. Tight per-route limit: this triggers an LLM call
+  // (same discipline as POST /pulls/:id/review; conventions precedent).
+  app.post(
+    '/pulls/:id/intent',
+    {
+      schema: { params: IdParams, response: { 200: IntentResponse } },
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (req): Promise<IntentDto> => {
+      const { workspaceId } = await getContext(container, req);
+      return service.rederiveIntent(workspaceId, req.params.id);
+    },
+  );
+
+  // Open feedback on the stored classification (correct/incorrect + note).
+  app.put(
+    '/pulls/:id/intent/feedback',
+    { schema: { params: IdParams, body: IntentFeedbackInput, response: { 200: IntentResponse } } },
+    async (req): Promise<IntentDto> => {
+      const { workspaceId } = await getContext(container, req);
+      return service.setIntentFeedback(workspaceId, req.params.id, req.body.verdict, req.body.note);
     },
   );
 

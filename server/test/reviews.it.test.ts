@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { intentLlmOverride, intentGithubOverride } from './helpers/intent.js';
 import * as t from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Review, StructuredRequest, StructuredResult } from '@devdigest/shared';
@@ -117,8 +118,13 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
+        // Intent pre-work uses the review_intent feature model (openrouter by
+        // default) + a GitHub fetch for bodyless PRs — mock both so the round
+        // never reaches real providers via server/.env (see helpers/intent.ts).
+        github: intentGithubOverride(),
         llm: {
           [provider]: new MockLLMProvider(provider, { structured }),
+          ...intentLlmOverride(),
         },
       },
     });
@@ -199,10 +205,19 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     expect(review.findings[0].file).toBe('src/config.ts');
     expect(review.findings[0].start_line).toBe(11);
 
-    // a run_traces document was written (single doc)
+    // a run_traces document was written (single doc). The run row flips done
+    // BEFORE saveRunTrace lands (INSIGHTS 2026-09-21), so a single immediate
+    // GET races the write — poll until the trace endpoint serves it.
     const runId = body.runs[0].run_id;
-    const trace = (await app.inject({ method: 'GET', url: `/runs/${runId}/trace` })).json();
-    expect(trace.config.model).toBe('gpt-4.1');
+    let trace:
+      | { config: { model: string }; stats: { grounding: string } & Record<string, unknown>; log: unknown[] }
+      | undefined;
+    for (let i = 0; i < 100 && !trace; i++) {
+      const res = await app.inject({ method: 'GET', url: `/runs/${runId}/trace` });
+      if (res.statusCode === 200) trace = res.json();
+      else await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(trace?.config.model).toBe('gpt-4.1');
     expect(trace.stats.grounding).toBe('1/2 passed');
     expect(trace.stats).toMatchObject({ grounding_kept: 1, grounding_total: 2, grounding_dropped: 1 });
     expect(trace.log.length).toBeGreaterThan(0);
@@ -330,7 +345,15 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     const app = await buildApp({
       config: config(),
       db: pg.handle.db,
-      overrides: { embedder: new MockEmbedder(), git: new MockGitClient({ diff: DIFF }), llm: { openai: llm } },
+      overrides: {
+        embedder: new MockEmbedder(),
+        git: new MockGitClient({ diff: DIFF }),
+        github: intentGithubOverride(),
+        // The gate must only ever hold the FIRST REVIEW call: the intent
+        // classifier (a separate openrouter mock) must sail through, or the
+        // round stalls before any run claims 'running'.
+        llm: { openai: llm, ...intentLlmOverride() },
+      },
     });
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
 

@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, RunEventKind, RunTrace } from '@devdigest/shared';
+import type { FindingActionKind, PrIntentDetail, RunEventKind, RunTrace } from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -7,6 +7,8 @@ import { type ReviewDto, type ReviewDtoFinding } from './helpers.js';
 import { ReviewRunExecutor, type Logger } from './run-executor.js';
 import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
+import { loadDiff } from './diff-loader.js';
+import { deriveIntent } from './intent.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
@@ -150,6 +152,57 @@ export class ReviewService {
 
   private publish(runId: string, kind: RunEventKind, msg: string, data?: unknown) {
     return this.container.runBus.publish(runId, kind, msg, data);
+  }
+
+  // ===========================================================================
+  // Intent
+  // ===========================================================================
+
+  /** The stored derivation for a PR (404 when the PR or the intent is absent). */
+  async getIntent(workspaceId: string, prId: string): Promise<PrIntentDetail> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const detail = await this.repo.getIntentDetail(prId);
+    if (!detail) throw new NotFoundError('Intent not found — run a review first');
+    return detail;
+  }
+
+  /**
+   * Manually (re-)derive now — the same derivation the executor runs as
+   * pre-work, minus the run logger. A null derivation (missing key, model
+   * error) surfaces as a 502 so the caller can tell "no key" from "no intent
+   * yet"; it NEVER affects queued runs.
+   */
+  async rederiveIntent(workspaceId: string, prId: string): Promise<PrIntentDetail> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const repo = await this.repo.getRepo(pull.repoId);
+    if (!repo) throw new NotFoundError('Repo not found');
+    const diff = await loadDiff(this.container, this.repo, workspaceId, pull, repo);
+    const record = await deriveIntent(this.container, workspaceId, pull, repo, diff);
+    if (!record) {
+      throw new AppError(
+        'intent_derivation_failed',
+        'Intent derivation failed — check the feature-model key and try again',
+        502,
+      );
+    }
+    await this.repo.upsertIntent(prId, record);
+    return (await this.repo.getIntentDetail(prId))!;
+  }
+
+  /** Record open user feedback on the derivation; returns the refreshed detail. */
+  async setIntentFeedback(
+    workspaceId: string,
+    prId: string,
+    verdict: 'correct' | 'incorrect',
+    note: string | undefined,
+  ): Promise<PrIntentDetail> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const ok = await this.repo.setIntentFeedback(prId, verdict, note);
+    if (!ok) throw new NotFoundError('Intent not found');
+    return (await this.repo.getIntentDetail(prId))!;
   }
 
   // ===========================================================================

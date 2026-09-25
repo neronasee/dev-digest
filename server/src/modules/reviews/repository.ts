@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { Finding, PrIntentDetail, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -19,6 +19,7 @@ export type { AgentRunRow, FindingRow, PrFileRow, PullRow, RepoRow, ReviewRow };
 import * as reviewRepo from './repository/review.repo.js';
 import * as runRepo from './repository/run.repo.js';
 import * as pullRepo from './repository/pull.repo.js';
+import type { PrIntentWrite } from '../../db/rows.js';
 
 export class ReviewRepository {
   constructor(private db: Db) {}
@@ -207,12 +208,23 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
-    return pullRepo.upsertIntent(this.db, prId, intent);
+  /** Persist one derivation over any previous row (derive-every-round). */
+  upsertIntent(prId: string, w: PrIntentWrite): Promise<void> {
+    return pullRepo.upsertIntent(this.db, prId, w);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
-    return pullRepo.getIntent(this.db, prId);
+  /** The stored derivation as the served contract shape (undefined when absent). */
+  getIntentDetail(prId: string): Promise<PrIntentDetail | undefined> {
+    return pullRepo.getIntentDetail(this.db, prId);
+  }
+
+  /** Record user feedback on the derivation; false when no row exists. */
+  setIntentFeedback(
+    prId: string,
+    verdict: 'correct' | 'incorrect',
+    note: string | undefined,
+  ): Promise<boolean> {
+    return pullRepo.setIntentFeedback(this.db, prId, verdict, note);
   }
 
   // ---- observability: agent_runs + run_traces ----------------------------

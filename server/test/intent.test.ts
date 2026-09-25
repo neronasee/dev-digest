@@ -87,6 +87,15 @@ function withDetail(detail: Partial<PrDetail>): MockGitHubClient {
 // ---- tests ------------------------------------------------------------------
 
 describe('findDocRefs', () => {
+  it('rejects absolute and traversal paths from PR-controlled text', () => {
+    const refs = findDocRefs(
+      'Read ../../private.md, /tmp/private.md, and docs/../private.md alongside docs/plans/safe.md.',
+      'acme',
+      'payments-api',
+    );
+    expect(refs.map((ref) => ref.path)).toEqual(['docs/plans/safe.md']);
+  });
+
   it('finds repo-relative .md paths and same-repo blob URLs; plans/specs win', () => {
     const text = [
       `Implements ${PLAN_PATH}.`,

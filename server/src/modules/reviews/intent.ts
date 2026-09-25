@@ -94,7 +94,9 @@ export function findDocRefs(text: string, owner: string, name: string): DocRef[]
   const seen = new Set<string>();
   const refs: DocRef[] = [];
   const add = (path: string) => {
-    if (!path || seen.has(path)) return;
+    // PR text is untrusted. Never pass an absolute or traversal path to the
+    // Git adapter, even when it came from a same-repo blob URL.
+    if (!path || path.startsWith('/') || path.split('/').some((part) => !part || part === '.' || part === '..') || seen.has(path)) return;
     seen.add(path);
     refs.push({ kind: /specs?\//i.test(path) ? 'spec' : 'plan', path });
   };

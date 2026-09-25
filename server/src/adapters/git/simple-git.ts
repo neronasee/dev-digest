@@ -1,6 +1,6 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { join } from 'node:path';
-import { mkdir, readFile, access, rm } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+import { mkdir, readFile, access, rm, realpath } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type {
   GitClient,
@@ -127,7 +127,13 @@ export class SimpleGitClient implements GitClient {
   }
 
   async readFile(repo: RepoRef, path: string): Promise<string> {
-    return readFile(join(this.clonePathFor(repo), path), 'utf8');
+    const root = await realpath(this.clonePathFor(repo));
+    const target = await realpath(resolve(root, path));
+    const withinRoot = relative(root, target);
+    if (withinRoot === '..' || withinRoot.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) || isAbsolute(withinRoot)) {
+      throw new Error('File path escapes the repository clone');
+    }
+    return readFile(target, 'utf8');
   }
 }
 

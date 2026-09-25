@@ -15,6 +15,7 @@ import type {
   RunSummary,
   ActiveRunSummary,
 } from "@devdigest/shared";
+import type { SmartDiffResponse } from "@/lib/types";
 
 // ---- Active (in-flight) runs — server-side source of truth ----
 export type ActiveRun = ActiveRunSummary;
@@ -48,6 +49,37 @@ export function usePrReviews(prId: string | null | undefined) {
     queryKey: ["reviews", prId],
     queryFn: () => api.get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
     enabled: !!prId,
+  });
+}
+
+// ---- Smart Diff (role-grouped Files changed; server-side classification) --
+/**
+ * Role-grouped diff for a PR (GET /pulls/:id/smart-diff — pure server reads,
+ * no LLM). Live-updates while a run is in flight: polls every 4s and, on the
+ * running→settled transition, invalidates both the groups and the reviews the
+ * inline finding set derives from (FindingsTab.onRunDone is unmounted here).
+ */
+export function useSmartDiff(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  // Read the SHARED active-runs cache (same key as usePrActiveRuns — no extra
+  // semantics, no second endpoint def) to know whether anything is running.
+  const { data: activeRuns } = usePrActiveRuns(prId);
+  const running = (activeRuns ?? []).length > 0;
+
+  const wasRunning = React.useRef(false);
+  React.useEffect(() => {
+    if (wasRunning.current && !running && prId) {
+      qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
+      qc.invalidateQueries({ queryKey: ["reviews", prId] });
+    }
+    wasRunning.current = running;
+  }, [running, prId, qc]);
+
+  return useQuery({
+    queryKey: ["smart-diff", prId],
+    queryFn: () => api.get<SmartDiffResponse>(`/pulls/${prId}/smart-diff`),
+    enabled: !!prId,
+    refetchInterval: running ? 4000 : false,
   });
 }
 

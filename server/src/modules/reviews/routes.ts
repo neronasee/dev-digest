@@ -11,6 +11,7 @@ import {
   RunRequest,
   RunSummary,
   RunTrace,
+  SmartDiff,
 } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
@@ -43,12 +44,19 @@ const IntentResponse = PrIntentDetail;
 /** Handler DTO derived from the SAME schema as `response` (INSIGHTS 2026-09-20). */
 type IntentDto = z.infer<typeof IntentResponse>;
 
+/** GET /pulls/:id/smart-diff — the shared SmartDiff (role-grouped files),
+ *  aliased like its siblings (schema const named after the route response). */
+const SmartDiffResponse = SmartDiff;
+/** Handler DTO derived from the SAME schema as `response` (INSIGHTS 2026-09-20). */
+type SmartDiffDto = z.infer<typeof SmartDiffResponse>;
+
 /**
  * reviews module.
  *   POST   /pulls/:id/review  {agentId} | {all:true}  → run review(s); returns runs
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
+ *   GET    /pulls/:id/smart-diff                       → files grouped by role + inline finding lines
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
  *   GET    /pulls/:id/intent                           → the stored PR intent (404 until derived)
  *   POST   /pulls/:id/intent                           → (re-)derive the PR intent now
@@ -197,6 +205,18 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.reviewsForPull(workspaceId, req.params.id);
+    },
+  );
+
+  // ---- Smart Diff (role-grouped files; pure classification — no LLM) ------
+  // Cheap read (two repository queries + pure grouping): the global rate
+  // limit suffices, same as the other PR reads.
+  app.get(
+    '/pulls/:id/smart-diff',
+    { schema: { params: IdParams, response: { 200: SmartDiffResponse } } },
+    async (req): Promise<SmartDiffDto> => {
+      const { workspaceId } = await getContext(container, req);
+      return service.smartDiffForPull(workspaceId, req.params.id);
     },
   );
 

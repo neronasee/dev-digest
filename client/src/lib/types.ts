@@ -31,8 +31,21 @@ export type {
   IndexStatus,
 } from "@devdigest/shared";
 
-export type { Review, Finding, FindingPreview, Severity, Verdict } from "@devdigest/shared";
-export type { PrBrief, SmartDiff } from "@devdigest/shared";
+export type {
+  Review,
+  Finding,
+  FindingRecord,
+  FindingPreview,
+  Severity,
+  Verdict,
+} from "@devdigest/shared";
+export type {
+  PrBrief,
+  SmartDiff,
+  SmartDiffGroup,
+  SmartDiffRole,
+  SmartDiffResponse,
+} from "@devdigest/shared";
 export type {
   PrIntentDetail,
   IntentClassification,

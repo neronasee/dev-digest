@@ -8,6 +8,7 @@ import type {
   StructuredResult,
 } from '@devdigest/shared';
 import { toJsonSchema, parseWithRepair } from './structured.js';
+import { withWallClock } from './wall-clock.js';
 
 /**
  * The single OpenAI-compatible structured provider, owned by the engine because
@@ -24,6 +25,16 @@ import { toJsonSchema, parseWithRepair } from './structured.js';
 
 const NOT_SUPPORTED = 'OpenRouterProvider only implements completeStructured';
 
+/**
+ * Wall-clock cap on ONE completeStructured call (ALL schema attempts + the
+ * SDK's per-request retries underneath). The SDK's own per-request timeout
+ * cannot be trusted to settle the promise (see wall-clock.ts) — this is the
+ * outer guard that turns a dropped request into a clean failure instead of a
+ * run stuck `running` forever. 10 min leaves generous room for slow models on
+ * huge single-pass diffs (typical runs finish in ~2 min).
+ */
+const DEFAULT_TOTAL_TIMEOUT_MS = 600_000;
+
 export interface OpenRouterProviderOptions {
   /** OpenAI-compatible base URL (default: OpenRouter). */
   baseURL?: string;
@@ -32,6 +43,8 @@ export interface OpenRouterProviderOptions {
   /** Per-request timeout (ms) — the SDK retries on timeout/5xx/429 with backoff. */
   timeoutMs?: number;
   maxRetries?: number;
+  /** Wall-clock cap (ms) on the WHOLE structured call, all attempts (default 600s). */
+  totalTimeoutMs?: number;
   /** Injected cost estimator; returns USD or null when the model is unknown. */
   estimateCost?: (model: string, tokensIn: number, tokensOut: number) => number | null;
 }
@@ -41,12 +54,14 @@ export class OpenRouterProvider implements LLMProvider {
   private client: OpenAI;
   private baseURL: string;
   private apiKey: string;
+  private totalTimeoutMs: number;
   private estimateCost?: OpenRouterProviderOptions['estimateCost'];
 
   constructor(apiKey: string, opts: OpenRouterProviderOptions = {}) {
     this.id = opts.id ?? 'openrouter';
     this.apiKey = apiKey;
     this.baseURL = opts.baseURL ?? 'https://openrouter.ai/api/v1';
+    this.totalTimeoutMs = opts.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
     this.estimateCost = opts.estimateCost;
     this.client = new OpenAI({
       apiKey,
@@ -56,7 +71,20 @@ export class OpenRouterProvider implements LLMProvider {
     });
   }
 
+  /**
+   * The whole structured call (schema-reprompt attempts × SDK retries) races a
+   * wall-clock deadline — see wall-clock.ts for why the SDK timeout alone is
+   * not enough. The deadline never cancels work that finishes on its own.
+   */
   async completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
+    return withWallClock(
+      this.structuredAttempts(req),
+      this.totalTimeoutMs,
+      `OpenRouter structured call for ${req.schemaName}`,
+    );
+  }
+
+  private async structuredAttempts<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>> {
     const jsonSchema = toJsonSchema(req.schema, req.schemaName);
     const maxRetries = req.maxRetries ?? 2;
     const messages = [...req.messages];

@@ -28,8 +28,12 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   const t = useTranslations("prReview.smartDiff");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
-  // Comments start hidden so the diff is clean by default — toggle to reveal.
+  // Comments start hidden so the diff is clean by default — but inline
+  // FINDINGS auto-reveal the layer once (below), because hiding the review's
+  // own output behind a toggle labeled "Show comments (0)" makes it
+  // undiscoverable. An explicit user toggle always wins after that.
   const [showComments, setShowComments] = React.useState(false);
+  const toggledByUser = React.useRef(false);
   // Role grouping is the default view; the toggle restores GitHub order.
   const [order, setOrder] = React.useState<"role" | "original">("role");
 
@@ -41,6 +45,13 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
   // While reviews load, assume a review exists — the muted "no review yet"
   // hint must not flash on every mount.
   const reviewsExist = reviews ? reviews.length > 0 : true;
+
+  // Findings auto-reveal the comment layer ONCE they arrive (no flash before:
+  // the layer stays hidden while reviews load); after an explicit toggle the
+  // user's choice sticks even if more findings stream in.
+  React.useEffect(() => {
+    if (inlineFindings.length > 0 && !toggledByUser.current) setShowComments(true);
+  }, [inlineFindings.length]);
 
   // Finding actions wired once: prId rides each mutation, onSuccess
   // invalidates ["reviews", prId] → inline set + badges refresh in place.
@@ -101,9 +112,17 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
                 kind="ghost"
                 size="sm"
                 icon={showComments ? "EyeOff" : "Eye"}
-                onClick={() => setShowComments((v) => !v)}
+                onClick={() => {
+                  toggledByUser.current = true;
+                  setShowComments((v) => !v);
+                }}
               >
-                {showComments ? "Hide comments" : "Show comments"} ({commentCount})
+                {/* Both counters stay distinct: (N) is GitHub comments, the
+                    suffix is the inline findings total the layer also gates. */}
+                {showComments ? t("hideComments") : t("showComments")} ({commentCount})
+                {inlineFindings.length > 0
+                  ? ` · ${t("findingsCount", { count: inlineFindings.length })}`
+                  : ""}
               </Button>
             )}
           </div>

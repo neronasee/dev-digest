@@ -12,3 +12,4 @@ A spec is updated in the same PR that changes the behavior it describes.
 | [02](02-skills.md) | Skills — storage, trust model, versioning, prompt injection |
 | [03](03-conventions.md) | Conventions Extractor — repo → evidence-gated candidates → skill |
 | [04](04-pr-intent.md) | PR Intent — motivation classification before review |
+| [05](05-smart-diff.md) | Smart Diff — role-grouped Files-changed with inline findings |

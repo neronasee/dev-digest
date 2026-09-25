@@ -1,5 +1,11 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, PrIntentDetail, RunEventKind, RunTrace } from '@devdigest/shared';
+import type {
+  FindingActionKind,
+  PrIntentDetail,
+  RunEventKind,
+  RunTrace,
+  SmartDiff,
+} from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -9,6 +15,7 @@ import { actOnFinding as actOnFindingImpl } from './findings.js';
 import { reviewToDto } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
 import { deriveIntent } from './intent.js';
+import { buildSmartDiff } from './smart-diff/smart-diff.js';
 
 // Re-export DTO types + converters for backward-compatible imports from
 // './service.js' (these previously lived here; logic now in ./helpers.ts).
@@ -220,6 +227,32 @@ export class ReviewService {
   // ===========================================================================
   // Reads
   // ===========================================================================
+
+  /**
+   * The Smart Diff for a PR: files grouped by role (core → tests → wiring →
+   * docs → boilerplate) with the newest review's findings marked per line.
+   * Pure DB reads + pure classification — no LLM, no adapters.
+   *
+   * PINNED (specs/05-smart-diff.md): "findings of the last review" = the
+   * findings of the single newest `reviews` row (reviewsForPull is
+   * created_at desc → rows[0]); the client computes the identical set as
+   * `reviews[0]?.findings ?? []`. Accept/dismiss state never changes
+   * membership; findings on files absent from `pr_files` are ignored for
+   * line marking (they cannot anchor anywhere).
+   */
+  async smartDiffForPull(workspaceId: string, prId: string): Promise<SmartDiff> {
+    const pull = await this.repo.getPull(workspaceId, prId);
+    if (!pull) throw new NotFoundError('Pull request not found');
+    const [files, reviewRows] = await Promise.all([
+      this.repo.getPrFiles(prId),
+      this.repo.reviewsForPull(prId),
+    ]);
+    const newestFindings = reviewRows[0]?.findings ?? [];
+    return buildSmartDiff(
+      files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),
+      newestFindings.map((f) => ({ file: f.file, start_line: f.startLine })),
+    );
+  }
 
   async reviewsForPull(workspaceId: string, prId: string): Promise<ReviewDto[]> {
     const pull = await this.repo.getPull(workspaceId, prId);

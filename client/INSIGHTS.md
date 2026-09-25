@@ -41,6 +41,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-25 — next-intl resolves a useTranslations NAMESPACE at hook-mount time, not at first t() call: adding `useTranslations("prReview.smartDiff")` to a SHARED component (diff-viewer FileCard/CodeLine) makes every test whose provider lacks that namespace log IntlError MISSING_MESSAGE even when the new code path never renders — fixtures rendering shared components must grow with the component's namespaces (src/test/smoke.test.tsx learned `prReview` the day FileCard did). (src/components/diff-viewer/FileCard/FileCard.tsx)
 - 2026-09-23 — AgentCard has accepted an optional skillCount ("{count} skills" badge) since its relocation to src/components/agent-card, but no call site passed it until the list contract changed — useAgents now types GET /agents as AgentSummary[] and AgentsListView just forwards a.skill_count. (src/lib/hooks/agents.ts, src/app/agents/_components/AgentsListView/AgentsListView.tsx)
 - 2026-09-22 — The vendored Modal pads only its header (`18px 24px`) and footer (`16px 24px`) — the body wrapper is deliberately unpadded, so body padding is caller-supplied and every modal body style must set its own (the skills `formBody` and confirm-modal `s.body` now carry `padding: 24`; before that, form labels sat clipped flush against the modal edge). (src/vendor/ui/kit/Modal.tsx:60, src/app/skills/_components/SkillsListView/styles.ts:88)
 - 2026-09-20 — The vendored shared contracts use the ESM `.js`-extension import style, which tsc and vitest resolve to `.ts` natively but webpack does NOT — the first RUNTIME import of the barrel (reviews.ts importing the RunEvent schema) failed `next dev`/`next build` with "Can't resolve './contracts/findings.js'" while typecheck passed, because type-only imports are erased before resolution. Fix: `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` in next.config.mjs (turbopack ignores the webpack hook but resolves natively). (next.config.mjs, src/vendor/shared/index.ts:17)
@@ -54,6 +55,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-25 — Changing a `messages/en/*.json` value's FORMAT (e.g. `"{count} files"` → ICU plural `"{count, plural, one {# file} other {# files}}"`) breaks every test asserting the old literal: TestingLibrary's "Unable to find an element with the text … broken up by multiple elements" points at DOM structure when the real cause is the rendered string changed — grep the test tree for the old message text before editing any message value. (src/components/diff-viewer/FileCard/FileCard.test.tsx:101 vs messages/en/prReview.json smartDiff.unanchoredTitle)
 - 2026-09-17 — The FINDINGS cell is a new em-dash source on top of the cost/score/updated ones below — the cost em-dash test must now pass `findings: [preview]` so `getByText("—")` stays single-match. (pulls/_components/PRRow/PRRow.test.tsx:69)
 - 2026-09-16 — `getByText("—")` in PRRow tests matches multiple cells (cost, null `updated_at` via `relativeTime`, null score) — give fixtures non-null `updated_at`/`score` before asserting on the em-dash, or scope the query to the cost cell. (pulls/_components/PRRow/PRRow.test.tsx)
 

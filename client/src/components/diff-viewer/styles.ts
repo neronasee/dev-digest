@@ -75,11 +75,79 @@ export function chevronFor(open: boolean): CSSProperties {
   };
 }
 
-/** Row background per line kind (add/del tinted, others transparent). */
+/**
+ * Row background per line kind (add/del tinted, others transparent). Every row
+ * carries a TRANSPARENT 3px left border so the severity bar on marked rows
+ * (lineRowMarked) recolors it instead of adding width — marked and unmarked
+ * lines share one column grid. LONGHANDS ONLY on purpose — React 19 dev-mode
+ * warns when one element's inline style mixes a shorthand
+ * (`border`/`borderColor`/…) with a longhand it expands to (client INSIGHTS
+ * 2026-09-18).
+ */
 export function lineRowFor(kind: Line["kind"]): CSSProperties {
   const background = kind === "add" ? "var(--code-add)" : kind === "del" ? "var(--code-del)" : "transparent";
-  return { display: "flex", alignItems: "stretch", fontSize: 13, lineHeight: "20px", background };
+  return {
+    display: "flex",
+    alignItems: "stretch",
+    fontSize: 13,
+    lineHeight: "20px",
+    background,
+    borderLeftWidth: 3,
+    borderLeftStyle: "solid",
+    borderLeftColor: "transparent",
+  };
 }
+
+/** A line row carrying inline review findings: the base row's left border
+ *  recolored to the top severity (width already reserved by lineRowFor). */
+export function lineRowMarked(kind: Line["kind"], sevColor: string): CSSProperties {
+  return { ...lineRowFor(kind), borderLeftColor: sevColor };
+}
+
+/** Severity label appended right of a marked line's text (color never alone). */
+export function lineSevLabel(sevColor: string): CSSProperties {
+  return {
+    alignSelf: "center",
+    marginLeft: 8,
+    padding: "1px 6px",
+    borderRadius: 4,
+    fontSize: 10,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: sevColor,
+    background: "var(--bg-hover)",
+    flexShrink: 0,
+  };
+}
+
+/** Small accent dot flagging a file that carries inline findings (6px circle,
+ *  deliberately distinct from the GitHub MessageSquare comment counter). */
+export const findingDot: CSSProperties = {
+  width: 6,
+  height: 6,
+  borderRadius: 99,
+  background: "var(--accent)",
+  flexShrink: 0,
+};
+
+/** Indented rail under a marked line hosting its inline FindingComments. */
+export const findingThread: CSSProperties = {
+  margin: "4px 14px 8px 58px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
+
+/** Footer rail for findings whose cited line is not in this patch. */
+export const unanchoredFindings: CSSProperties = {
+  borderTop: "1px solid var(--border)",
+  margin: "4px 14px 4px 58px",
+  paddingTop: 10,
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+};
 
 /** Gutter sign colour per line kind. */
 export function lineSignFor(kind: Line["kind"]): CSSProperties {

@@ -1,0 +1,1 @@
+export { SmartDiffView } from "./SmartDiffView";

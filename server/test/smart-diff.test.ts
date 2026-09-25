@@ -109,10 +109,15 @@ describe('buildSmartDiff', () => {
     expect(diff.groups[4]!.files.map((f) => f.path)).toEqual(['pnpm-lock.yaml']);
   });
 
-  it('omits empty groups', () => {
+  it('includes empty groups so every role header stays visible', () => {
     const diff = buildSmartDiff([{ path: 'README.md', additions: 1, deletions: 0 }], []);
-    expect(diff.groups).toHaveLength(1);
-    expect(diff.groups[0]!.role).toBe('docs');
+    expect(diff.groups.map((group) => [group.role, group.files.length])).toEqual([
+      ['core', 0],
+      ['tests', 0],
+      ['wiring', 0],
+      ['docs', 1],
+      ['boilerplate', 0],
+    ]);
   });
 
   it('finding_lines: sorted, deduped, per matching path; unknown-file findings ignored', () => {

@@ -38,14 +38,14 @@ vendored copies.
 
 ## 3. Server — `src/modules/reviews/smart-diff/`
 
-`constants.ts` (pure data): `SMART_DIFF_ROLE_ORDER` (display order), 
+`constants.ts` (pure data): `SMART_DIFF_ROLE_ORDER` (display order),
 `SMART_DIFF_PRECEDENCE` (match order, no `core` — it is the fallback, never
 matched), `SMART_DIFF_PATTERNS` (one matcher list per non-core role).
 `classify.ts`: `classifyFile(path)` — picomatch matchers compiled once at
 module scope; per pattern, basename or full path per D2; walks the precedence,
 returns `'core'` when nothing matches. `smart-diff.ts`: `buildSmartDiff(files,
-findings)` — groups in role order (empty groups omitted, input order kept
-inside a group), per file `finding_lines` = sorted deduped `start_line`s of
+findings)` — all five groups in role order (empty roles have zero files; input
+order is kept inside a group), per file `finding_lines` = sorted deduped `start_line`s of
 findings whose `file` equals the path (unknown-file findings dropped), the D7
 minimal `split_suggestion`.
 

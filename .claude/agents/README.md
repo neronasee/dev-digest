@@ -41,6 +41,12 @@ request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (appro
           pr-self-review (main agent's pre-PR gate) → PR
 ```
 
+The approval gate in the pipeline is the **user's**, not the orchestrator's:
+after the planner returns, the main agent presents the plan and waits for the
+user's explicit approval before dispatching the implementer — it never
+auto-advances that boundary. Later transitions (implementer → reviewers →
+pr-self-review) run without a mandatory pause.
+
 `brainstorm` sits upstream of `planner` — it sharpens a fuzzy idea into a
 brief and never plans; a request already concrete enough goes straight to the
 planner. `test-writer` is a supporting write lane for dedicated test-coverage

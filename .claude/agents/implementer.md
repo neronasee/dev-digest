@@ -66,6 +66,31 @@ After the last task:
 - If you touched either `src/vendor/shared/`, mirror the change into the other copy
   byte-identically and typecheck BOTH `server/` and `client/`.
 
+## Debugging discipline
+
+When a check fails or code misbehaves, before anything elaborate:
+
+- **Read the reported region first.** On a parse/type error in a file you wrote, read the
+  reported line range ±20 lines before writing any probe. The error site is often not the
+  cause site — a `*/` embedded in a block comment (e.g. inside prose like `` `*/specs/` ``)
+  terminates the comment early and cascades into bogus template-literal errors far below.
+  Bisection harnesses are a last resort, after two direct reads have failed.
+- **Measure, don't hypothesize.** Instrument to get the real timeline — event buffers,
+  a scratch test that dumps what actually happened — then delete the scratch. Never apply
+  a fix that would also hide a live-network or credentials leak (e.g. shortening a timeout
+  so a slow test passes): if measurements show real I/O inside a test lane, the fix is
+  mocking the adapter, never waiting less.
+- **Typecheck only via the package's own commands** (`pnpm typecheck` / `npm run
+  typecheck`). Never `tsc <file>` on loose files — diagnostics are polluted by unrelated
+  `@types/*` resolution and will mislead you.
+- **A new adapter use ships its test override in the same change.** If a task makes code
+  under existing test coverage call a new adapter (LLM provider, GitHub, git), the
+  matching mock override (via `src/adapters/mocks.ts` / ContainerOverrides) lands in that
+  same task — local `.env` keys make an unmocked adapter REAL in the it-lane, and CI
+  (no `.env`) cannot see the leak.
+- **Never mask check output.** Full output to a log file, exit code echoed separately —
+  never `cmd | tail` alone, which reports the pipe's exit code, not the command's.
+
 ## Report format
 
 ```

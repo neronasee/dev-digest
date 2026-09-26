@@ -80,13 +80,28 @@
   },
   "smartDiff": {
     "coreLabel": "Core",
+    "testsLabel": "Tests",
     "wiringLabel": "Wiring",
+    "docsLabel": "Docs",
     "boilerplateLabel": "Boilerplate",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
-    "filesCount": "{count} files",
-    "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "filesCount": "{count, plural, one {# file} other {# files}}",
+    "findingLines": "{count, plural, one {# finding-line} other {# finding-lines}}",
+    "originalOrder": "Original order",
+    "groupByRole": "Group by role",
+    "filesWithFindings": "{count} with findings",
+    "severityLabel": {
+      "CRITICAL": "blocker",
+      "WARNING": "warning",
+      "SUGGESTION": "suggestion"
+    },
+    "unanchoredTitle": "{count, plural, one {# finding on lines not in this patch} other {# findings on lines not in this patch}}",
+    "reviewNotRunTitle": "No review yet",
+    "reviewNotRunBody": "Run a review to see its findings inline in the diff.",
+    "showComments": "Show comments",
+    "hideComments": "Hide comments",
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}"
   },
   "list": {
     "breadcrumb": "Pull Requests",

@@ -26,6 +26,8 @@ classification is additive per file.
 | `server/src/modules/**/routes.ts` | fastify-best-practices, onion-architecture (transport ring), security | server: typecheck + unit + depcruise |
 | `server/src/modules/**/{service,run-executor}*.ts` | onion-architecture; security on auth/input hunks | server: typecheck + unit + depcruise |
 | `server/src/modules/**/repository*.ts`, `server/src/modules/**/repository/**` | onion-architecture (table ownership), drizzle-orm-patterns (query patterns) | server: typecheck + unit + depcruise |
+| `server/src/modules/**/*.ts` (any other module file — services, helpers, module-local logic not matched above) | onion-architecture; security on input-handling hunks | server: typecheck + unit + depcruise |
+| `server/test/**` | none (naming invariant C6; mock discipline via `src/adapters/mocks.ts` — flag any test that could resolve a real adapter) | server: typecheck + unit |
 | `server/src/modules/_shared/schemas.ts` | zod, fastify-best-practices, security | server: typecheck + unit |
 | `server/src/adapters/**` | onion-architecture, security | server: typecheck + unit + depcruise |
 | `server/src/platform/**` | onion-architecture (composition root / DI) | server: typecheck + unit + depcruise |
@@ -39,6 +41,7 @@ classification is additive per file.
 | `server/package.json` | typescript-expert | server: typecheck (+ invariant C2) |
 | `reviewer-core/src/llm/structured.ts` | zod, onion-architecture (core purity) | core: npm test + typecheck; server `depcruise:all` |
 | `reviewer-core/src/**` (all other) | onion-architecture (`core-is-pure`) | core: npm test + typecheck; server `depcruise:all` |
+| `reviewer-core/test/**` | none (naming invariant C6) | core: npm test + typecheck |
 | `reviewer-core/{tsconfig,package}.json` | typescript-expert | core: typecheck (+ invariant C2) |
 | `e2e/specs/*.flow.json` | none (naming invariant C6 only) | e2e: typecheck; flow-name regex |
 | `e2e/lib/**` | none | e2e: typecheck (npm test only if hermetic stack is up) |

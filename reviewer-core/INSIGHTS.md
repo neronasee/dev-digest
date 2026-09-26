@@ -34,7 +34,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-25 — The OpenAI SDK's per-request `timeout` does NOT guarantee the create() promise settles: an aborted undici request can hang forever with the awaiting run stuck `running` and the server process holding ZERO timers/sockets (diagnose with `kill -USR1 <pid>` + CDP `process._getActiveHandles()`), so every structured call needs an outer `Promise.race` wall-clock deadline — `withWallClock` in src/llm/wall-clock.ts, wired into OpenRouterProvider.completeStructured. (src/llm/wall-clock.ts, src/llm/openrouter.ts)
 
 ## Recurring Errors & Fixes
 

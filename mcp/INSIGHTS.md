@@ -39,7 +39,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-09-26 — Adding `test/**/*.ts` to tsconfig `include` (tests were previously never type-checked) surfaced TS2571 on pre-existing assertions: one property read into `structuredContent: Record<string, unknown>` typechecks, but a chain like `sc.summary.total` doesn't — cast the intermediate (`sc.summary as Record<string, unknown>`) where the code reads two levels deep. (test/tools.test.ts:281, tsconfig.json:28)
 
 ## Session Notes
 

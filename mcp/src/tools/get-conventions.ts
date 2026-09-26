@@ -1,6 +1,6 @@
 /* get-conventions — a repository's extracted coding conventions.
-   Status filtering is client-side (the route has no query filter); the
-   emitted rows are the compact model-facing subset. */
+   Status filtering and the limit slice are client-side (the route has no
+   query filter); the emitted rows are the compact model-facing subset. */
 
 import { z } from 'zod-v4';
 import type { McpServer } from '@modelcontextprotocol/server';
@@ -23,17 +23,20 @@ export function registerGetConventionsTool(server: McpServer, client: ApiClient)
       inputSchema: z.object({
         repo: z.string().describe('Repository full_name (e.g. "acme/payments-api") or bare name'),
         status: z.enum(['pending', 'accepted', 'rejected']).optional().describe('Filter by triage status'),
+        limit: z.number().int().min(1).max(50).default(10).describe('Max conventions returned (default 10)'),
       }),
     },
-    async ({ repo, status }) => {
+    async ({ repo, status, limit }) => {
       try {
         const repoId = await resolveRepoId(client, repo);
         const all = await client.listConventions(repoId);
         const filtered = status ? all.filter((c) => c.status === status) : all;
+        const included = filtered.slice(0, limit);
         const structuredContent = {
           repo,
           total: filtered.length,
-          conventions: filtered.map((c) => ({
+          truncated: filtered.length > included.length,
+          conventions: included.map((c) => ({
             rule: c.rule,
             category: c.category,
             status: c.status,

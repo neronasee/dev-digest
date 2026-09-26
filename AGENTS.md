@@ -36,6 +36,7 @@ sync when contracts change.
 | `client/`  | `pnpm test` (vitest + jsdom, fetch mocked)       | `pnpm typecheck`  | — (no linter configured) |
 | `reviewer-core/` | `npm test`                                 | `npm run typecheck` | — |
 | `e2e/`     | `npm test` (needs `./scripts/e2e.sh` stack)      | `npm run typecheck` | — |
+| `mcp/`     | `npm test` (vitest, hermetic — API is a route stub) | `npm run typecheck` | — |
 
 ### Do not touch
 

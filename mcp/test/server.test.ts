@@ -3,7 +3,8 @@
  * (`createMcpHandler(() => createServer({ fetchImpl: stub })`), driven by a
  * fetch-shaped JSON-RPC transport: every request is a `new Request(...)` fed
  * to `handler.fetch`. Asserts the five-tool surface, fixed order, read-only
- * hints, and the two zero-arg tools. Hermetic — the API is a route stub.
+ * hints, the two zero-arg tools, and get-conventions' client-side status/limit
+ * filtering. Hermetic — the API is a route stub.
  */
 import { describe, expect, it } from 'vitest';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -201,5 +202,36 @@ describe('zero-arg and simple tools', () => {
   it('get-conventions without status returns everything', async () => {
     const result = await callTool(makeHandler(), 'get-conventions', { repo: 'payments-api' });
     expect(result.structuredContent!.total).toBe(2);
+    expect(result.structuredContent!.conventions).toHaveLength(2);
+    expect(result.structuredContent!.truncated).toBe(false);
+  });
+
+  it('get-conventions default limit 10 caps a longer list and sets truncated', async () => {
+    const many: ConventionCandidate[] = Array.from({ length: 12 }, (_, i) => ({
+      ...conventions[0]!,
+      id: `c-${i}`,
+      rule: `Rule ${i}`,
+    }));
+    const handler = createMcpHandler(() =>
+      createServer({ fetchImpl: stubFetch({ ...routes, '/repos/repo-1/conventions': many }) }),
+    );
+    const result = await callTool(handler, 'get-conventions', { repo: 'payments-api' });
+
+    expect(result.structuredContent!.total).toBe(12);
+    const rows = result.structuredContent!.conventions as Array<Record<string, unknown>>;
+    expect(rows).toHaveLength(10);
+    expect(rows[0]).toMatchObject({ rule: 'Rule 0' });
+    expect(result.structuredContent!.truncated).toBe(true);
+  });
+
+  it('get-conventions honors an explicit limit; truncated clears when all rows fit', async () => {
+    const tight = await callTool(makeHandler(), 'get-conventions', { repo: 'payments-api', limit: 1 });
+    expect(tight.structuredContent!.total).toBe(2);
+    expect(tight.structuredContent!.conventions).toHaveLength(1);
+    expect(tight.structuredContent!.truncated).toBe(true);
+
+    const roomy = await callTool(makeHandler(), 'get-conventions', { repo: 'payments-api', limit: 50 });
+    expect(roomy.structuredContent!.conventions).toHaveLength(2);
+    expect(roomy.structuredContent!.truncated).toBe(false);
   });
 });

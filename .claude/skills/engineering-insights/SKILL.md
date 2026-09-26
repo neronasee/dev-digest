@@ -1,11 +1,11 @@
 ---
 name: engineering-insights
-description: Read and update the per-module INSIGHTS.md logs (server/, client/, reviewer-core/, e2e/). Use before starting any task in one of these modules or when debugging something non-obvious there — read that module's INSIGHTS.md first. Use again whenever a non-obvious gotcha, debugging dead end, library quirk, or design rationale is discovered, and at the end of a substantial session, to append dated entries under the right section without duplicating existing ones. Invoke manually as /engineering-insights to review or record insights. Not for content that belongs in a README, docs/, or specs/ file.
+description: Read and update the per-module INSIGHTS.md logs (server/, client/, reviewer-core/, e2e/, mcp/). Use before starting any task in one of these modules or when debugging something non-obvious there — read that module's INSIGHTS.md first. Use again whenever a non-obvious gotcha, debugging dead end, library quirk, or design rationale is discovered, and at the end of a substantial session, to append dated entries under the right section without duplicating existing ones. Invoke manually as /engineering-insights to review or record insights. Not for content that belongs in a README, docs/, or specs/ file.
 ---
 
 # Engineering Insights
 
-Four `INSIGHTS.md` files — one per module — capture non-obvious knowledge:
+Five `INSIGHTS.md` files — one per module — capture non-obvious knowledge:
 gotchas hit in practice, dead ends, "why it's built this way". This skill says
 when to read them and how to add entries. See `examples.md` for ❌/✅ pairs.
 
@@ -17,9 +17,10 @@ when to read them and how to add entries. See `examples.md` for ❌/✅ pairs.
 | Next.js studio UI | `client/INSIGHTS.md` |
 | Review engine (prompt assembly, grounding, structured output) | `reviewer-core/INSIGHTS.md` |
 | Browser flows, hermetic runner | `e2e/INSIGHTS.md` |
+| MCP server (stdio tools wrapping the review API) | `mcp/INSIGHTS.md` |
 
 - repo-intel is part of server/ — its insights go to `server/INSIGHTS.md`.
-- Work outside the four modules (repo root, `scripts/`, `docs/`) has no
+- Work outside the five modules (repo root, `scripts/`, `docs/`) has no
   INSIGHTS.md — don't create one.
 
 ## Before working in a module — read

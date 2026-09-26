@@ -75,7 +75,10 @@ export function registerGetFindingsTool(server: McpServer, client: ApiClient): v
 
         const truncated =
           rows.length > included.length ||
-          (!verbose && included.some(({ finding }) => oneLine(finding.rationale) !== finding.rationale));
+          (!verbose &&
+            included.some(
+              ({ finding }) => oneLine(finding.rationale) !== finding.rationale || finding.suggestion != null,
+            ));
 
         const structuredContent = {
           repo,

@@ -2,7 +2,8 @@
  * tools — the two workflow tools over the in-process SDK handler: the
  * resolver chain and request bodies run-agent-on-pr issues, its fire-and-forget
  * note, ResolveError/429 surfacing, and get-findings' client-side filtering,
- * ordering, limit/truncation, and rationale trimming. Hermetic (route stub).
+ * ordering, limit/truncation, and rationale/suggestion trimming. Hermetic
+ * (route stub).
  */
 import { describe, expect, it } from 'vitest';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -277,7 +278,8 @@ describe('get-findings', () => {
       pr_number: 482,
       run_id: 'run-1',
     });
-    expect(result.structuredContent!.summary.total).toBe(2);
+    const summary = result.structuredContent!.summary as Record<string, unknown>;
+    expect(summary.total).toBe(2);
     const findings = result.structuredContent!.findings as Array<Record<string, unknown>>;
     expect(findings.map((f) => f.title)).toEqual(['finding f1', 'finding f2']);
     const reviews = result.structuredContent!.reviews as Array<Record<string, unknown>>;
@@ -296,7 +298,7 @@ describe('get-findings', () => {
     const findings = result.structuredContent!.findings as unknown[];
     expect(findings).toHaveLength(10);
     expect(result.structuredContent!.truncated).toBe(true);
-    expect(result.structuredContent!.summary.total).toBe(12);
+    expect((result.structuredContent!.summary as Record<string, unknown>).total).toBe(12);
   });
 
   it('non-verbose rationale: first line only, no newline, ≤ 200 chars; cut rationale sets truncated', async () => {
@@ -315,6 +317,33 @@ describe('get-findings', () => {
     expect(rationale.length).toBeLessThanOrEqual(200);
     expect(result.structuredContent!.truncated).toBe(true);
     expect('suggestion' in findings[0]!).toBe(false);
+  });
+
+  it('non-verbose drops suggestions → truncated flips even when the rationale fits one line', async () => {
+    const mk = (suggestion: string | null) =>
+      handlerWith({
+        ...baseRoutes,
+        '/pulls/pr-482/reviews': [
+          mkReview('rev-s', 'run-s', 'General', [
+            { ...mkFinding('s', 'WARNING', 0.9, 'fits on one line'), suggestion },
+          ]),
+        ],
+      });
+
+    const dropped = await callTool(mk('**Fix s**: do the thing').handler, 'get-findings', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+    });
+    const withSuggestion = dropped.structuredContent!.findings as Array<Record<string, unknown>>;
+    expect(withSuggestion[0]!.rationale).toBe('fits on one line'); // rationale NOT cut…
+    expect('suggestion' in withSuggestion[0]!).toBe(false); // …but the suggestion was dropped…
+    expect(dropped.structuredContent!.truncated).toBe(true); // …so truncated must notice.
+
+    const bare = await callTool(mk(null).handler, 'get-findings', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+    });
+    expect(bare.structuredContent!.truncated).toBe(false); // nothing dropped → not truncated
   });
 
   it('verbose includes full rationale and suggestion markdown, no cut', async () => {

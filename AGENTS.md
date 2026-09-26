@@ -104,5 +104,6 @@ sync when contracts change.
 - Delegating work instead of doing it inline — planning, implementing, testing,
   reviewing, documenting → check
   [.claude/agents/README.md](.claude/agents/README.md) (fleet map: researcher,
-  planner, implementer, test-writer, architecture-reviewer, plan-verifier,
-  doc-writer).
+  brainstorm, planner, implementer, test-writer, architecture-reviewer,
+  plan-verifier, doc-writer, insights-curator — the last one user-invoked via
+  /curate-insights only).

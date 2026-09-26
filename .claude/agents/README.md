@@ -17,10 +17,15 @@ README — are silently ignored by the agent loader.
 | [architecture-reviewer](architecture-reviewer.md) | Architecture review | opus | Nothing (read-only) | Onion/boundary findings with evidence + depcruise gate; REJECT…ACCEPT verdict |
 | [plan-verifier](plan-verifier.md) | Plan compliance | sonnet | Nothing (read-only) | Per-item VERIFIED/PARTIAL/MISSING ledger of a plan vs the diff; runs the plan's checks |
 | [doc-writer](doc-writer.md) | Documentation | sonnet | Docs (*.md) only | Turns implemented work into README/docs/specs/TESTING content with verified commands and diagrams |
+| [brainstorm](brainstorm.md) | Ideation | opus | `docs/briefs/*.md` only | Fuzzy idea → grounded decision brief (capped question rounds, 2-4 options, recommendation) for the planner |
+| [insights-curator](insights-curator.md) | INSIGHTS.md curation | sonnet | The four `INSIGHTS.md` only | User-invoked periodic gardening — evidence-checked merge/prune/re-date + promotion proposals |
 
 ## The plan → implement pipeline
 
 ```
+fuzzy idea → brainstorm → docs/briefs/YYYY-MM-DD-<slug>.md → caller review
+                                                              │ approved (brief becomes the request)
+                                                              ▼
 request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (approval gate)
                                                               │ approved
                                                               ▼
@@ -36,11 +41,17 @@ request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (appro
           pr-self-review (main agent's pre-PR gate) → PR
 ```
 
-`test-writer` is a supporting write lane for dedicated test-coverage work —
-dispatched on demand (typically alongside or after the implementer), never
-inside a plan run. `researcher` stays orthogonal — on demand at any point. A
-dedicated security-review agent is still future; until then security lenses
-run inside `pr-self-review`.
+`brainstorm` sits upstream of `planner` — it sharpens a fuzzy idea into a
+brief and never plans; a request already concrete enough goes straight to the
+planner. `test-writer` is a supporting write lane for dedicated test-coverage
+work — dispatched on demand (typically alongside or after the implementer),
+never inside a plan run. `researcher` stays orthogonal — on demand at any
+point. `insights-curator` is the periodic, user-invoked gardener of the module
+INSIGHTS.md logs (via `/curate-insights` — see
+[.claude/skills/curate-insights/SKILL.md](../skills/curate-insights/SKILL.md));
+it is the sole sanctioned exception to their append-only capture contract and
+is never dispatched inside normal work. A dedicated security-review agent is
+still future; until then security lenses run inside `pr-self-review`.
 
 ## Agents
 
@@ -137,6 +148,45 @@ run inside `pr-self-review`.
 - **Output artifacts** — docs files (with their index rows) plus a chat report:
   `## Result / Files / Destination rationale / Diagrams / Verification / Deviations / Notes`.
 
+### brainstorm — [brainstorm.md](brainstorm.md)
+
+- **Responsibility** — turn a fuzzy idea into a grounded decision brief at
+  `docs/briefs/YYYY-MM-DD-<slug>.md`: classify the request (announced; heavier
+  class when in doubt), research the repo before asking, run capped question
+  rounds relayed by the caller (≤3 per round, ≤5 total, multiple-choice with
+  defaults, never asking what the repo answers), explore 2-4 grounded options
+  with trade-offs, recommend one, and end exactly where the planner picks up.
+  The brief states what and why — never task lists, files, or skill routings.
+- **Model / permissions** — opus; `maxTurns: 60`; tools `Read, Grep, Glob,
+  Write, Bash, TodoWrite` — Write chartered to a single brief file; Bash
+  read-only (git log/show/blame/diff, ls, wc, rg). No permissionMode (planner
+  parity).
+- **Input** — a fuzzy idea or an open design question.
+- **Output artifacts** — `docs/briefs/YYYY-MM-DD-<slug>.md` (gitignored
+  handoff artifact) plus a chat summary: `## Brief / Classification /
+  Understanding confirmed / Ambiguities defaulted / Next step`. A question
+  round returns `## Understanding` + `## Questions` and stops — the caller
+  relays the answers and resumes the agent (it retains its history).
+
+### insights-curator — [insights-curator.md](insights-curator.md)
+
+- **Responsibility** — periodic gardening of the four module INSIGHTS.md
+  logs: evidence-check every entry (refs still exist, version claims still
+  current, no semantic drift, not a duplicate), then verdicts KEEP / MERGE /
+  PRUNE / RE-DATE / RESOLVE / FLAG — every prune cites the failed check;
+  negative evidence (dead ends, reverts) survives unless obsolete; promotions
+  into README/docs are proposed only, for a doc-writer dispatch. Runs on a
+  clean tree only; never commits.
+- **Model / permissions** — sonnet; `permissionMode: acceptEdits`;
+  `maxTurns: 100`; tools `Read, Edit, Write, Grep, Glob, Bash, TodoWrite` —
+  writes limited to the four INSIGHTS.md files; Bash read-only (git
+  status/log/show/blame/diff, ls, wc, rg).
+- **Input** — a user request to curate (typically `/curate-insights`,
+  optionally naming one module). Clean git tree required.
+- **Output artifacts** — edits to the four INSIGHTS.md files plus a chat
+  report: `## Result / Per-file ledger / Pruned / Open Questions / Promotion
+  proposals / Size / Notes`. The caller reviews the diff.
+
 ## Grounding (planner & implementer)
 
 Their rules were assembled from official documentation and source-level inspection of
@@ -193,11 +243,34 @@ Assembled like the planner/implementer rules above (2026-09-24):
 | Quickstart shape; link-don't-duplicate; one authoritative version | spec-kit + BMAD |
 | "Last verified: date against sha" staleness stamp | OpenAI harness-engineering |
 
+## Grounding (brainstorm & insights-curator)
+
+Assembled like the sections above (2026-09-26, source-inspected):
+
+| Rule in the agents | Grounded in |
+|--------------------|-------------|
+| Classify-announce before questioning; heavier-class ratchet; research before asking; write-back understanding; ≤5 question budget; YAGNI; placeholder self-review; single named next step | superpowers `brainstorming` skill |
+| Question caps with best-guess defaults; default-and-document degradation ladder; declarative handoff line | spec-kit `specify` / `clarify` |
+| Divergent → convergent → synthesis phases; question budget; never preview what happens next | BMAD v4 `facilitate-brainstorming-session` + analyst |
+| Persisted brief artifact — answers must not live only in chat | spec-kit; superpowers design doc; BMAD output template |
+| Round protocol — subagents have no user-question tools (AskUserQuestion is stripped); resumed subagents retain history | official sub-agents docs |
+| Capture/curate split — curation is a separate periodic pass, never a side effect of capture | Anthropic memory tool; Letta sleep-time compute; LangMem |
+| Deterministic checks first, judgment second; evidence-cited findings | HumanLayer ("never send an LLM to do a linter's job"); Upkeep |
+| Cut the derivable, keep pitfalls/rationale; size budgets; merge-or-drop stale entries | Claude Code memory docs (`/doctor` trim rule, MEMORY.md index rules) |
+| Negative evidence is the most durable class — dead ends and reverts survive | presence |
+| Promotion pressure-test — few clusters earn promotion (2,249 lesson files → ~3 skills) | superpowers (blog.fsck.com) |
+| Clean tree before reorganization; two-pass self-review of own edits | Letta sleep-time compute |
+| User-only invocation — `disable-model-invocation` + `context: fork` + `agent:` is the only documented gate; no agent-side equivalent exists | official skills + sub-agents docs |
+
 ## Creating new agents
 
 - One `<name>.md` per agent; frontmatter: `name`, `description` (trigger phrases + explicit
   NOT-for list), `model`, `tools` (least-privilege allowlist); optionally `permissionMode`,
   `maxTurns`. Unknown fields are silently ignored by Claude Code.
+- A user-invocable-ONLY agent needs a skill wrapper: a
+  `.claude/skills/<name>/SKILL.md` with `disable-model-invocation: true`,
+  `context: fork`, and `agent: <name>` — agent descriptions gate nothing
+  mechanically (see `curate-insights`).
 - Body pattern (see [researcher.md](researcher.md) for the exemplar): charter → procedure →
   fixed report format → guardrails. The body is the agent's entire system prompt; the repo
   AGENTS.md is loaded on top automatically.

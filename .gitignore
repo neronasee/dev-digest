@@ -29,3 +29,6 @@ test-results/
 
 # planner-agent development plans (local handoff artifacts, not shipped)
 docs/plans/
+
+# brainstorm-agent decision briefs (local handoff artifacts, not shipped)
+docs/briefs/

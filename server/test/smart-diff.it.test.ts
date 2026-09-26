@@ -154,8 +154,8 @@ d('GET /pulls/:id/smart-diff (Testcontainers pg)', () => {
     expect(body.split_suggestion).toEqual({ too_big: false, total_lines: 66, proposed_splits: [] });
   });
 
-  it('serves an empty-groups payload (all files in one role) without the other groups', async () => {
-    // a PR whose only file is boilerplate → exactly one group
+  it('serves every role group with zero-file counts when all files land in one role', async () => {
+    // a PR whose only file is boilerplate → all five groups, four with 0 files
     const name = `solo-${seq++}`;
     const [repo] = await pg.handle.db
       .insert(t.repos)

@@ -1,8 +1,8 @@
 /**
  * Smart Diff classifier + builder (hermetic — no DB, no HTTP, no container).
  * Pins the path→role table (including the three CONTESTED precedence cases),
- * the group-order/empty-group-omission rules, finding_lines semantics, and the
- * minimal split_suggestion fill.
+ * the group-order rules (zero-file role groups stay visible), finding_lines
+ * semantics, and the minimal split_suggestion fill.
  */
 import { describe, it, expect } from 'vitest';
 import type { SmartDiffRole } from '@devdigest/shared';

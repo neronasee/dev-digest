@@ -55,13 +55,16 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
 
   // Finding actions wired once: prId rides each mutation, onSuccess
   // invalidates ["reviews", prId] → inline set + badges refresh in place.
+  // Dep is `mutate` (TanStack keeps it referentially stable), never the whole
+  // mutation-result object — that one is fresh on every render.
   const action = useFindingAction();
+  const { mutate } = action;
   const pendingFindingId = action.isPending ? action.variables?.findingId ?? null : null;
   const onFindingAction = React.useCallback(
     (act: FindingActionKind, findingId: string) => {
-      if (prId) action.mutate({ action: act, findingId, prId });
+      if (prId) mutate({ action: act, findingId, prId });
     },
-    [action, prId],
+    [mutate, prId],
   );
 
   const commentCount = comments?.length ?? 0;

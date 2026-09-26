@@ -26,3 +26,9 @@ test-results/
 
 # skill-eval iteration workspaces (skill-creator scaffolding, not shipped)
 .claude/skills/*-workspace/
+
+# planner-agent development plans (local handoff artifacts, not shipped)
+docs/plans/
+
+# brainstorm-agent decision briefs (local handoff artifacts, not shipped)
+docs/briefs/

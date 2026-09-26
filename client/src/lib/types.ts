@@ -33,3 +33,11 @@ export type {
 
 export type { Review, Finding, FindingPreview, Severity, Verdict } from "@devdigest/shared";
 export type { PrBrief, SmartDiff } from "@devdigest/shared";
+export type {
+  PrIntentDetail,
+  IntentClassification,
+  IntentCategory,
+  IntentEvidence,
+  IntentEvidenceSource,
+  IntentFeedbackInput,
+} from "@devdigest/shared";

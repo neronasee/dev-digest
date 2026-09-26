@@ -1,4 +1,29 @@
 {
+  "intent": {
+    "label": "Intent",
+    "inScope": "In scope",
+    "outOfScope": "Out of scope",
+    "confidence": {
+      "high": "High confidence",
+      "medium": "Medium confidence",
+      "low": "Low confidence"
+    },
+    "inferredNote": "Inferred from indirect signals — no description",
+    "provenancePrefix": "derived from",
+    "breakingChange": "breaking change",
+    "emptyTitle": "No intent yet",
+    "emptyBody": "Run a review to derive intent",
+    "feedback": {
+      "correct": "Correct",
+      "incorrect": "Incorrect",
+      "notePlaceholder": "Optional note…",
+      "markedCorrect": "Marked correct",
+      "markedIncorrect": "Marked incorrect"
+    },
+    "rederive": "Re-derive",
+    "rederiving": "Re-deriving…",
+    "actionFailed": "Action failed — try again."
+  },
   "finding": {
     "accepted": "accepted",
     "dismissed": "rejected",

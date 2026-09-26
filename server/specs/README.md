@@ -11,3 +11,4 @@ A spec is updated in the same PR that changes the behavior it describes.
 | [01](01-pr-list-findings-field.md) | PR list findings field — `PrMeta.findings` latest-round previews |
 | [02](02-skills.md) | Skills — storage, trust model, versioning, prompt injection |
 | [03](03-conventions.md) | Conventions Extractor — repo → evidence-gated candidates → skill |
+| [04](04-pr-intent.md) | PR Intent — motivation classification before review |

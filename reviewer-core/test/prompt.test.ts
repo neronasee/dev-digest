@@ -81,3 +81,33 @@ describe('assemblePrompt — ## PR description', () => {
     expect(exact.assembly.pr_description).not.toContain('[description truncated');
   });
 });
+
+describe('assemblePrompt — ## PR intent', () => {
+  it('renders the section (untrusted-wrapped) between PR description and Skills / rules, and records it in the assembly', () => {
+    const { messages, assembly } = assemblePrompt({
+      system: 'sys',
+      diff: 'DIFF',
+      prDescription: 'Adds rate limiting.',
+      intent: 'Planned hardening: rate-limit the public API (bugfix).',
+      skills: ['RULE-1'],
+    });
+    const user = messages[1]!.content;
+    expect(user).toContain('## PR intent');
+    expect(user).toContain('<untrusted source="intent">');
+    expect(user).toContain('Planned hardening: rate-limit the public API (bugfix).');
+    // Ordering: PR description → PR intent → Skills / rules.
+    expect(user.indexOf('## PR description')).toBeLessThan(user.indexOf('## PR intent'));
+    expect(user.indexOf('## PR intent')).toBeLessThan(user.indexOf('## Skills / rules'));
+    expect(assembly.intent).toBe('Planned hardening: rate-limit the public API (bugfix).');
+  });
+
+  it('omits the section when intent is undefined or blank; neither section appears without a PR description either', () => {
+    expect(userOf({ system: 'sys', diff: 'DIFF' })).not.toContain('## PR intent');
+    expect(assemblePrompt({ system: 'sys', diff: 'DIFF' }).assembly.intent ?? null).toBeNull();
+    expect(userOf({ system: 'sys', diff: 'DIFF', intent: '   ' })).not.toContain('## PR intent');
+    // The omit-when-empty pair: no description AND no intent → neither section.
+    const neither = userOf({ system: 'sys', diff: 'DIFF' });
+    expect(neither).not.toContain('## PR description');
+    expect(neither).not.toContain('## PR intent');
+  });
+});

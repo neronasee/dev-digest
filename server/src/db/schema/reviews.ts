@@ -1,8 +1,9 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, uuid, text, integer, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, jsonb, timestamp, doublePrecision, index } from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces } from './core';
 import { pullRequests } from './pulls';
+import type { IntentEvidence, IntentEvidenceSource } from '@devdigest/shared';
 
 // ============================================================ Review & findings
 
@@ -62,6 +63,34 @@ export const prIntent = pgTable('pr_intent', {
   intent: text('intent').notNull(),
   inScope: jsonb('in_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   outOfScope: jsonb('out_of_scope').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // ---- Intent Layer (migration 0015, pure-add) -----------------------------
+  // Literal tuple (NOT IntentCategory.options — drizzle's enum param needs the
+  // literal type); mirrors contracts/intent.ts's 8-value closed vocabulary.
+  // No CHECK constraint: house style keeps the enum in the contract, not the DB.
+  /** The classifier's observed reasoning (contract field #1, judged-after-observed). */
+  reasoning: text('reasoning').notNull().default(''),
+  /** Post-policy evidence kinds the model claimed (⊆ the provided kinds). */
+  evidenceUsed: jsonb('evidence_used').$type<IntentEvidenceSource[]>().notNull().default(sql`'[]'::jsonb`),
+  category: text('category', { enum: ['feature', 'bugfix', 'refactor', 'performance', 'docs', 'test', 'chore', 'other'] })
+    .notNull()
+    .default('other'),
+  breakingChange: boolean('breaking_change').notNull().default(false),
+  /** Post-policy confidence, 0–1 (capped when inferred / claims dropped).
+   *  doublePrecision (not real/float4) to match findings.confidence — a
+   *  served 0.86 must round-trip at full double precision. */
+  confidence: doublePrecision('confidence').notNull().default(0),
+  /** Derived without any documentary source (no description/issue/plan/spec). */
+  inferred: boolean('inferred').notNull().default(false),
+  /** Evidence actually provided to the classifier (IntentEvidence[]). */
+  sources: jsonb('sources').$type<IntentEvidence[]>().notNull().default(sql`'[]'::jsonb`),
+  /** Provenance: which model derived this. */
+  model: text('model'),
+  /** Provenance: the derivation's USD cost (null when unpriced). */
+  costUsd: doublePrecision('cost_usd'),
+  derivedAt: timestamp('derived_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Open user feedback: 'correct' | 'incorrect' once reacted. */
+  feedback: text('feedback', { enum: ['correct', 'incorrect'] }),
+  feedbackNote: text('feedback_note'),
 });
 
 export const prBrief = pgTable('pr_brief', {

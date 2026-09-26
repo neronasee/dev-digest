@@ -101,3 +101,9 @@ sync when contracts change.
   before a task, especially when debugging something non-obvious.
 - Designing or changing a feature → check the module's `specs/` for an existing
   behavior spec; if one exists, update it in the same PR.
+- Delegating work instead of doing it inline — planning, implementing, testing,
+  reviewing, documenting → check
+  [.claude/agents/README.md](.claude/agents/README.md) (fleet map: researcher,
+  brainstorm, planner, implementer, test-writer, architecture-reviewer,
+  plan-verifier, doc-writer, insights-curator — the last one user-invoked via
+  /curate-insights only).

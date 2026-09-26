@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "devdigest": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PROJECT_DIR}/mcp/node_modules/tsx/dist/cli.mjs",
+        "${CLAUDE_PROJECT_DIR}/mcp/src/index.ts"
+      ],
+      "env": { "DEVDIGEST_API_BASE": "http://127.0.0.1:3001" }
+    }
+  }
+}

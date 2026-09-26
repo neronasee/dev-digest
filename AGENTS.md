@@ -1,6 +1,6 @@
 # AGENTS.md — DevDigest
 
-Local-first AI pull-request review (course starter). Four standalone packages,
+Local-first AI pull-request review (course starter). Five standalone packages,
 **no monorepo workspace**: each has its own `package.json` and lockfile;
 cross-package code is consumed through tsconfig path aliases (`@devdigest/shared`,
 `@devdigest/ui`, `@devdigest/reviewer-core`), never published.
@@ -13,6 +13,7 @@ cross-package code is consumed through tsconfig path aliases (`@devdigest/shared
 | `client/`        | `@devdigest/web`          | Next.js 15 studio (App Router, React 19, TanStack Query)    | 3000 |
 | `reviewer-core/` | `@devdigest/reviewer-core`| Pure review engine: diff → prompt → LLM → grounded findings | —    |
 | `e2e/`           | `@devdigest/e2e`          | Deterministic browser e2e (agent-browser, no LLM)           | —    |
+| `mcp/`           | `@devdigest/mcp`          | MCP server (stdio): five tools wrapping the local review API for coding agents | — (outbound only) |
 
 Shared Zod contracts (`@devdigest/shared`) are vendored at
 `server/src/vendor/shared` and `client/src/vendor/shared` — keep the copies in
@@ -20,7 +21,7 @@ sync when contracts change.
 
 ## Environment & commands
 
-- Node ≥ 22. **pnpm** in `server/` and `client/`; **npm** in `reviewer-core/` and `e2e/`.
+- Node ≥ 22. **pnpm** in `server/` and `client/`; **npm** in `reviewer-core/`, `e2e/`, and `mcp/`.
 - pnpm ≥ 10 blocks dependency build scripts by default; approvals live in each
   package's `pnpm-workspace.yaml` (`allowBuilds`), not in `package.json`.
 - `./scripts/dev.sh` — Postgres (Docker) + migrations + seed + API + web.
@@ -42,7 +43,8 @@ sync when contracts change.
   re-generate an applied migration; add a new one (`pnpm db:generate` in
   `server/`). Migrations are append-only history.
 - **Lockfiles** (`server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`,
-  `reviewer-core/package-lock.json`, `e2e/package-lock.json`) — never edit by
+  `reviewer-core/package-lock.json`, `e2e/package-lock.json`,
+  `mcp/package-lock.json`) — never edit by
   hand or regenerate casually; they're the reproducible-install contract.
   Dependency changes go through the package manager (`pnpm install <pkg>` /
   `npm install <pkg>`), never manual lockfile edits.

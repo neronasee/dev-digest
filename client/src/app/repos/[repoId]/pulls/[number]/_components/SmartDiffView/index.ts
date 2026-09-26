@@ -1,1 +1,1 @@
-export { SmartDiffView } from "./SmartDiffView";
+export { SmartDiffView, SmartDiffView as default } from "./SmartDiffView";

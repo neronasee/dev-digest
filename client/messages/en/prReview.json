@@ -88,7 +88,6 @@
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
     "filesCount": "{count, plural, one {# file} other {# files}}",
     "findingLines": "{count, plural, one {# finding-line} other {# finding-lines}}",
-    "groupedByRole": "Smart Diff · grouped by role",
     "originalOrder": "Original order",
     "groupByRole": "Group by role",
     "filesWithFindings": "{count} with findings",

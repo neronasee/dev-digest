@@ -107,7 +107,9 @@ describe("FileCard — inline findings", () => {
     renderCard({ commenting: undefined });
     // No commenting API → no FindingComments anywhere…
     expect(screen.queryByText("Off-by-one in the loop bound")).not.toBeInTheDocument();
-    expect(screen.queryByText(/finding\(s\) on lines not in this patch/)).not.toBeInTheDocument();
+    // The ICU plural renders "1 finding on lines not in this patch" — match
+    // the real copy, not the message-format source.
+    expect(screen.queryByText(/on lines not in this patch/i)).not.toBeInTheDocument();
     // …but the severity label on the line remains.
     expect(screen.getByText("blocker")).toBeInTheDocument();
   });

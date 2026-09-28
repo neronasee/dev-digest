@@ -15,6 +15,7 @@ README — are silently ignored by the agent loader.
 | [implementer](implementer.md) | Execution | sonnet | Code in all 4 packages | Executes an approved Development Plan; skills + per-package checks; evidence report |
 | [test-writer](test-writer.md) | Test coverage | sonnet | Test files + e2e flows only | Writes/runs tests across packages; defects reported, never fixed |
 | [architecture-reviewer](architecture-reviewer.md) | Architecture review | opus | Nothing (read-only) | Onion/boundary findings with evidence + depcruise gate; REJECT…ACCEPT verdict |
+| [security-reviewer](security-reviewer.md) | Security review | opus | Nothing (read-only) | OWASP 2025 + LLM Top 10 audit of a changeset; CWE-tagged findings, secret scan, deterministic verdict |
 | [plan-verifier](plan-verifier.md) | Plan compliance | sonnet | Nothing (read-only) | Per-item VERIFIED/PARTIAL/MISSING ledger of a plan vs the diff; runs the plan's checks |
 | [doc-writer](doc-writer.md) | Documentation | sonnet | Docs (*.md) only | Turns implemented work into README/docs/specs/TESTING content with verified commands and diagrams |
 | [brainstorm](brainstorm.md) | Ideation | opus | `docs/briefs/*.md` only | Fuzzy idea → grounded decision brief (capped question rounds, 2-4 options, recommendation) for the planner |
@@ -34,8 +35,10 @@ request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (appro
                         ┌─────────────────────────────────────┼─────────────────────────────────────┐
                         ▼                                     ▼                                     ▼
           architecture-reviewer                         plan-verifier                         doc-writer
-          (Advised reviews — boundaries,        (every plan task vs the diff —       (plan + diff → README/,
-          depcruise evidence, verdict)           per-item verdicts, fresh runs)       docs/, specs/ + diagrams)
+          security-reviewer                     (every plan task vs the diff —       (plan + diff → README/,
+          (Advised reviews — boundaries +        per-item verdicts, fresh runs)       docs/, specs/ + diagrams)
+          depcruise; security — OWASP +
+          LLM Top 10 audit + secret scan)
                         └─────────────────────────────────────┼─────────────────────────────────────┘
                                                               ▼
           pr-self-review (main agent's pre-PR gate) → PR
@@ -50,8 +53,10 @@ point. `insights-curator` is the periodic, user-invoked gardener of the module
 INSIGHTS.md logs (via `/curate-insights` — see
 [.claude/skills/curate-insights/SKILL.md](../skills/curate-insights/SKILL.md));
 it is the sole sanctioned exception to their append-only capture contract and
-is never dispatched inside normal work. A dedicated security-review agent is
-still future; until then security lenses run inside `pr-self-review`.
+is never dispatched inside normal work. `security-reviewer` is the on-demand
+security lane — deep OWASP Top 10:2025 + LLM Top 10 audit of a stated
+changeset; `pr-self-review` keeps its own security lens and invariant pre-scan
+for the pre-PR gate.
 
 ## Agents
 
@@ -121,6 +126,26 @@ still future; until then security lenses run inside `pr-self-review`.
 - **Input** — a changeset scope, or the planner's "Advised reviews" note after implementation.
 - **Output artifact** — chat report: `## Verdict / Findings / Predictions / Checked /
   Mechanical gates / Not examined`. No files.
+
+### security-reviewer — [security-reviewer.md](security-reviewer.md)
+
+- **Responsibility** — security review of a changeset (default: working tree
+  vs `origin/main`) against OWASP Top 10:2025, the OWASP Top 10 for LLM
+  Applications 2025, and the repo threat-surface map (route authz, raw SQL,
+  repo-intel SSRF / command injection, secrets, INJECTION_GUARD / prompt
+  injection, LLM output handling, pgvector, MCP agency, client XSS / env).
+  Trust model stated before inspection; predictions first; `rg` secret scan
+  over added diff lines as the mechanical gate; a verification pass per
+  candidate (attacker-control trace + exploit scenario, confidence-gated);
+  findings carry CWE / LLM-Top-10 class tags and the vendored severity enum;
+  deterministic verdict from the table only.
+- **Model / permissions** — opus; read-only — `Read, Grep, Glob, Bash, TodoWrite`,
+  no Write/Edit; Bash chartered to read-only git (`diff/log/show/blame/ls-files`),
+  `ls`/`wc`/`rg`.
+- **Input** — a changeset scope, or the planner's "Advised reviews" security
+  flag after implementation.
+- **Output artifact** — chat report: `## Verdict / Findings / Predictions /
+  Trust model / Checked / Mechanical scans / Not examined`. No files.
 
 ### plan-verifier — [plan-verifier.md](plan-verifier.md)
 
@@ -261,6 +286,30 @@ Assembled like the sections above (2026-09-26, source-inspected):
 | Promotion pressure-test — few clusters earn promotion (2,249 lesson files → ~3 skills) | superpowers (blog.fsck.com) |
 | Clean tree before reorganization; two-pass self-review of own edits | Letta sleep-time compute |
 | User-only invocation — `disable-model-invocation` + `context: fork` + `agent:` is the only documented gate; no agent-side equivalent exists | official skills + sub-agents docs |
+
+## Grounding (security-reviewer)
+
+Assembled like the sections above (2026-09-28, source-inspected):
+
+| Rule in the agent | Grounded in |
+|--------------------|-------------|
+| Read-only allowlist — git read ops + Read/Glob/Grep; opus model | Anthropic `claude-code-security-review` (tool allowlist, opus default); GitHub Copilot routes security-sensitive code to higher-reasoning models |
+| Confidence ladder — HIGH report / MEDIUM note / LOW never; judgment CRITICAL < 0.7 downgraded to WARNING | repo `security` skill ladder + `pr-self-review` report-format rule |
+| Exclusion list — tests, DoS / rate limiting, secrets-on-disk, framework-mitigated, dev-only, generated / vendor, lockfiles | Anthropic security-review prompt ("better to miss some theoretical issues than flood the report with false positives") |
+| Verification pass — attacker-control trace + exploit scenario per surviving finding | Anthropic FP-filter second stage; CodeRabbit Deep Scan Verify phase; Anthropic SDL "proof of validity" (16% → 54% substantive reviews) |
+| Trust-model statement before inspection; severity judged inside it | ZeroPath repo-context study (declarative trust-boundary facts cut 71–76% of candidates, zero lost highs) |
+| Dual taxonomy — OWASP Top 10:2025 + LLM Top 10 2025; CWE / class tags per finding | OWASP Top 10:2025 listing; OWASP GenAI LLM Top 10 2025; Anthropic reviewer CWE classification |
+| Diff-scoped — only newly introduced issues; findings must intersect a hunk | Anthropic prompt ("ONLY on security implications newly added by this PR") + repo grounding golden rule |
+| "No findings" is an explicit outcome | GitHub Copilot code review (29% of reviews surface nothing); Anthropic Action `review_completed` + empty findings array |
+| Treat diff / PR text as untrusted input to the reviewer | official Action README prompt-injection warning |
+| Knowledge in the `security` skill; role / contract in the agent body | official skills ↔ sub-agents docs (preloaded skill vs agent system prompt) |
+
+Sources: [anthropics/claude-code-security-review](https://github.com/anthropics/claude-code-security-review) ·
+[Anthropic SDL write-up](https://claude.com/blog/how-anthropic-secures-its-ai-native-software-development-lifecycle) ·
+[OWASP Top 10:2025](https://top10.owasp.org/2025/) ·
+[OWASP LLM Top 10 2025](https://genai.owasp.org/llm-top-10/) ·
+[CodeRabbit security docs](https://docs.coderabbit.ai/security) ·
+[ZeroPath repo-context study](https://zeropath.com/blog/reduce-false-positives-with-repo-context)
 
 ## Creating new agents
 

@@ -94,7 +94,14 @@ export function FileCard({
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
-        {findingCount > 0 && <span aria-hidden style={findingDot} title={tf("findingLines", { count: findingCount })} />}
+        {findingCount > 0 && (
+          <span
+            role="img"
+            aria-label={tf("findingLines", { count: findingCount })}
+            style={findingDot}
+            title={tf("findingLines", { count: findingCount })}
+          />
+        )}
         <span className="mono" style={s.filePath}>
           {file.path}
         </span>

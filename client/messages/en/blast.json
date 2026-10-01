@@ -1,4 +1,8 @@
 {
+  "title": "Blast radius",
+  "subtitle": "What this change can affect, from the repo index",
+  "error": "Couldn't load the blast radius.",
+  "noCallers": "No downstream callers.",
   "stat": {
     "symbols": "symbols",
     "callers": "callers",
@@ -11,8 +15,39 @@
   },
   "callerCount": "{count} callers",
   "noDownstream": "{count} changed symbol(s), no downstream callers found.",
+  "impact": {
+    "more": "+{count} more",
+    "fewer": "Show fewer"
+  },
   "graph": {
     "empty": "No downstream callers to graph.",
-    "ariaLabel": "Blast radius graph"
+    "ariaLabel": "Blast radius graph",
+    "legend": {
+      "symbol": "Changed symbol",
+      "callers": "Callers",
+      "endpoints": "Endpoints",
+      "crons": "Cron jobs"
+    },
+    "trimmed": "Map trimmed for readability — switch to tree view for the full map."
+  },
+  "degraded": {
+    "label": "Partial index",
+    "reason": {
+      "flag_off": "Repo intel is switched off",
+      "index_failed": "Indexing failed",
+      "index_partial": "Index is incomplete",
+      "repo_too_large": "Repository too large to index",
+      "no_data": "No index data yet"
+    }
+  },
+  "resync": "Resync index",
+  "resyncNote": "Indexing runs in the background — the map refreshes once it finishes.",
+  "history": {
+    "title": "Prior PRs touching these files",
+    "empty": "No prior PRs touch these files.",
+    "error": "Couldn't load prior PRs.",
+    "merged": "merged {date}",
+    "sharedFiles": "{count} shared file(s)",
+    "more": "+{count} more prior PR(s)"
   }
 }

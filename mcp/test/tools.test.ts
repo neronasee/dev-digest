@@ -1,9 +1,10 @@
 /**
  * tools — the two workflow tools over the in-process SDK handler: the
- * resolver chain and request bodies run-agent-on-pr issues, its fire-and-forget
- * note, ResolveError/429 surfacing, and get-findings' client-side filtering,
- * ordering, limit/truncation, and rationale/suggestion trimming. Hermetic
- * (route stub).
+ * resolver chain and request bodies run-agent-on-pr issues, its wait-then-report
+ * result (per-run status + findings summary, run-id scoping, failed-run errors,
+ * the wait-timeout fallback note), ResolveError/429 surfacing, and get-findings'
+ * client-side filtering, ordering, limit/truncation, and rationale/suggestion
+ * trimming. Hermetic (route stub).
  */
 import { describe, expect, it } from 'vitest';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -16,6 +17,7 @@ import type {
   Repo,
   ReviewRecord,
   ReviewRunResponse,
+  RunSummary,
   Severity,
 } from '@devdigest/shared';
 
@@ -45,7 +47,9 @@ async function rpc<T>(handler: McpHttpHandler, method: string, params?: unknown)
   return (await res.json()) as { result?: T; error?: unknown };
 }
 
-/** Route-table stub that records method+path and every POST body. */
+/** Route-table stub that records method+path and every POST body.
+ *  A route value may be a function — it is re-evaluated per call, so stateful
+ *  routes (e.g. /runs flipping running → done across polls) stay expressible. */
 function stubFetch(routes: Record<string, unknown>) {
   const calls: string[] = [];
   const posts: Array<{ path: string; body: unknown }> = [];
@@ -53,7 +57,8 @@ function stubFetch(routes: Record<string, unknown>) {
     const path = new URL(String(input)).pathname;
     calls.push(`${init?.method ?? 'GET'} ${path}`);
     if (init?.method === 'POST') posts.push({ path, body: JSON.parse(String(init.body)) });
-    const body = routes[path];
+    const route = routes[path];
+    const body = typeof route === 'function' ? (route as () => unknown)() : route;
     if (body === undefined) {
       return Promise.resolve(
         new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: `no stub for ${path}` } }), {
@@ -154,22 +159,63 @@ function mkReview(id: string, runId: string, agentName: string, findings: Findin
   };
 }
 
+function mkRun(
+  runId: string,
+  agentName: string,
+  status: RunSummary['status'],
+  extra?: Partial<RunSummary>,
+): RunSummary {
+  return {
+    run_id: runId,
+    agent_id: `agent-${agentName.toLowerCase()}`,
+    agent_name: agentName,
+    provider: 'openai',
+    model: 'gpt-4.1',
+    status,
+    error: null,
+    duration_ms: 1_000,
+    tokens_in: 10,
+    tokens_out: 20,
+    cost_usd: 0.001,
+    findings_count: 0,
+    grounding: null,
+    grounding_dropped: 0,
+    ran_at: null,
+    started_at: null,
+    score: null,
+    blockers: null,
+    verdict: null,
+    ...extra,
+  };
+}
+
 const runResponse: ReviewRunResponse = {
   pr_id: 'pr-482',
   runs: [{ run_id: 'run-9', agent_id: 'agent-general', agent_name: 'General' }],
   reviews: [],
 };
 
+const doneRun = mkRun('run-9', 'General', 'done', { score: 70, verdict: 'comment', findings_count: 2 });
+const runReview = mkReview('rev-9', 'run-9', 'General', [
+  mkFinding('f1', 'CRITICAL', 0.9, 'first line of the story\nsecond line never shown'),
+  mkFinding('f2', 'WARNING', 0.7, 'plain warning'),
+]);
+
 const baseRoutes: Record<string, unknown> = {
   '/repos': [repo],
   '/repos/repo-1/pulls': [pull],
   '/agents': [mkAgent('General'), mkAgent('Security')],
   '/pulls/pr-482/review': runResponse,
+  '/pulls/pr-482/runs': [doneRun],
+  '/pulls/pr-482/reviews': [runReview],
 };
 
 function handlerWith(routes: Record<string, unknown>): { handler: McpHttpHandler; stub: ReturnType<typeof stubFetch> } {
   const stub = stubFetch(routes);
-  return { handler: createMcpHandler(() => createServer({ fetchImpl: stub.fetchImpl })), stub };
+  return {
+    handler: createMcpHandler(() => createServer({ fetchImpl: stub.fetchImpl, pollIntervalMs: 5 })),
+    stub,
+  };
 }
 
 async function callTool(handler: McpHttpHandler, name: string, args: Record<string, unknown>): Promise<CallResult> {
@@ -179,7 +225,7 @@ async function callTool(handler: McpHttpHandler, name: string, args: Record<stri
 }
 
 describe('run-agent-on-pr', () => {
-  it('resolves repo → PR → agent and POSTs { agentId }', async () => {
+  it('resolves repo → PR → agent, POSTs { agentId }, waits, and returns the run result', async () => {
     const { handler, stub } = handlerWith(baseRoutes);
     const result = await callTool(handler, 'run-agent-on-pr', {
       repo: 'acme/payments-api',
@@ -187,7 +233,14 @@ describe('run-agent-on-pr', () => {
       agent: 'General',
     });
 
-    expect(stub.calls).toEqual(['GET /repos', 'GET /repos/repo-1/pulls', 'GET /agents', 'POST /pulls/pr-482/review']);
+    expect(stub.calls).toEqual([
+      'GET /repos',
+      'GET /repos/repo-1/pulls',
+      'GET /agents',
+      'POST /pulls/pr-482/review',
+      'GET /pulls/pr-482/runs',
+      'GET /pulls/pr-482/reviews',
+    ]);
     expect(stub.posts[0]).toEqual({ path: '/pulls/pr-482/review', body: { agentId: 'agent-general' } });
 
     expect(result.isError).toBeFalsy();
@@ -195,18 +248,116 @@ describe('run-agent-on-pr', () => {
     expect(sc.repo).toBe('acme/payments-api');
     expect(sc.pr_number).toBe(482);
     const runs = sc.runs as Array<Record<string, unknown>>;
-    expect(runs[0]).toEqual({ run_id: 'run-9', agent_name: 'General', status: 'queued' });
-    expect(sc.note).toBe(
-      'Review started in the background (runs are async). Poll get-findings with run_id for results.',
-    );
+    expect(runs[0]).toEqual({
+      run_id: 'run-9',
+      agent_name: 'General',
+      status: 'done',
+      score: 70,
+      verdict: 'comment',
+      findings_count: 2,
+    });
+    expect(sc.summary).toEqual({ total: 2, CRITICAL: 1, WARNING: 1, SUGGESTION: 0 });
+    const findings = sc.findings as Array<Record<string, unknown>>;
+    expect(findings.map((f) => f.title)).toEqual(['finding f1', 'finding f2']);
   });
 
   it('omitted agent → { all: true } (no /agents call)', async () => {
     const { handler, stub } = handlerWith(baseRoutes);
     await callTool(handler, 'run-agent-on-pr', { repo: 'payments-api', pr_number: 482 });
 
-    expect(stub.calls).toEqual(['GET /repos', 'GET /repos/repo-1/pulls', 'POST /pulls/pr-482/review']);
+    expect(stub.calls).toEqual([
+      'GET /repos',
+      'GET /repos/repo-1/pulls',
+      'POST /pulls/pr-482/review',
+      'GET /pulls/pr-482/runs',
+      'GET /pulls/pr-482/reviews',
+    ]);
     expect(stub.posts[0]!.body).toEqual({ all: true });
+  });
+
+  it('failed run → status failed with its error, empty findings', async () => {
+    const routes = {
+      ...baseRoutes,
+      '/pulls/pr-482/runs': [mkRun('run-9', 'General', 'failed', { error: 'LLM provider timeout' })],
+      '/pulls/pr-482/reviews': [],
+    };
+    const { handler } = handlerWith(routes);
+    const result = await callTool(handler, 'run-agent-on-pr', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+      agent: 'General',
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent!;
+    const runs = sc.runs as Array<Record<string, unknown>>;
+    expect(runs[0]).toMatchObject({ run_id: 'run-9', status: 'failed', error: 'LLM provider timeout' });
+    expect(sc.summary).toEqual({ total: 0, CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
+    expect(sc.findings).toEqual([]);
+  });
+
+  it('findings are scoped to this trigger\'s run ids (an older run\'s review is excluded)', async () => {
+    const stale = mkReview('rev-old', 'run-1', 'Security', [mkFinding('f9', 'CRITICAL', 0.99, 'stale critical')]);
+    const routes = { ...baseRoutes, '/pulls/pr-482/reviews': [stale, runReview] };
+    const { handler } = handlerWith(routes);
+    const result = await callTool(handler, 'run-agent-on-pr', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+      agent: 'General',
+    });
+
+    const sc = result.structuredContent!;
+    expect(sc.summary).toEqual({ total: 2, CRITICAL: 1, WARNING: 1, SUGGESTION: 0 });
+    const findings = sc.findings as Array<Record<string, unknown>>;
+    expect(findings.map((f) => f.title)).toEqual(['finding f1', 'finding f2']);
+  });
+
+  it('wait budget exceeded → fallback note to poll get-findings (no reviews fetch)', async () => {
+    const { handler, stub } = handlerWith({
+      ...baseRoutes,
+      '/pulls/pr-482/runs': [mkRun('run-9', 'General', 'running')],
+    });
+    const result = await callTool(handler, 'run-agent-on-pr', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+      agent: 'General',
+      wait_seconds: 1,
+    });
+
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent!;
+    const runs = sc.runs as Array<Record<string, unknown>>;
+    expect(runs[0]).toEqual({ run_id: 'run-9', agent_name: 'General', status: 'running' });
+    expect(sc.note).toBe(
+      'Still running after 1s (runs are async). Poll get-findings with run_id for results.',
+    );
+    expect(stub.calls).not.toContain('GET /pulls/pr-482/reviews');
+    expect(stub.calls.filter((c) => c === 'GET /pulls/pr-482/runs').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('returns started run IDs if polling fails after the review was triggered', async () => {
+    const { handler, stub } = handlerWith({ ...baseRoutes, '/pulls/pr-482/runs': undefined });
+    const result = await callTool(handler, 'run-agent-on-pr', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+    });
+
+    expect(result.structuredContent?.runs).toEqual(runResponse.runs);
+    expect(result.structuredContent?.note).toContain('Poll get-findings with run_id');
+    expect(stub.calls).toContain('POST /pulls/pr-482/review');
+    expect(stub.calls).toContain('GET /pulls/pr-482/runs');
+  });
+
+  it('empty-string agent → schema rejection (never falls through to all-agents)', async () => {
+    const { handler, stub } = handlerWith(baseRoutes);
+    const { result, error } = await rpc<{ isError?: boolean }>(handler, 'tools/call', {
+      name: 'run-agent-on-pr',
+      arguments: { repo: 'acme/payments-api', pr_number: 482, agent: '' },
+    });
+    // Zod rejects at the protocol layer — the handler (and its POST) never runs:
+    // the SDK answers with an errored tool result, never a successful all-run.
+    expect(result?.isError ?? Boolean(error)).toBe(true);
+    expect(stub.calls).toEqual([]);
   });
 
   it('unknown agent → isError listing candidate names', async () => {
@@ -371,5 +522,59 @@ describe('get-findings', () => {
     expect(result.structuredContent!.summary).toEqual({ total: 2, CRITICAL: 2, WARNING: 0, SUGGESTION: 0 });
     const findings = result.structuredContent!.findings as Array<Record<string, unknown>>;
     expect(findings.map((f) => f.title)).toEqual(['finding f1', 'finding f4']);
+  });
+});
+
+describe('get-blast-radius', () => {
+  const blast = {
+    changed_symbols: [
+      { name: 'refundPayment', file: 'src/payments/refund.ts', kind: 'function' },
+    ],
+    downstream: [
+      {
+        symbol: 'refundPayment',
+        callers: [{ name: 'handleRefund', file: 'src/routes/orders.ts', line: 42 }],
+        endpoints_affected: ['POST /orders/:id/refund'],
+        crons_affected: [],
+      },
+    ],
+    summary: '1 changed symbol(s), 1 downstream caller(s), 1 impacted endpoint(s), 0 impacted cron job(s)',
+    degraded: true,
+    reason: 'index_partial',
+  };
+  const routes: Record<string, unknown> = {
+    ...baseRoutes,
+    '/pulls/pr-482/blast': blast,
+  };
+
+  it('resolves repo → PR and passes the BlastRadius payload through unchanged (incl. degraded/reason)', async () => {
+    const { handler, stub } = handlerWith(routes);
+    const result = await callTool(handler, 'get-blast-radius', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+    });
+
+    expect(stub.calls).toEqual(['GET /repos', 'GET /repos/repo-1/pulls', 'GET /pulls/pr-482/blast']);
+    expect(result.isError).toBeFalsy();
+    const sc = result.structuredContent!;
+    expect(sc.repo).toBe('acme/payments-api');
+    expect(sc.pr_number).toBe(482);
+    expect(sc.changed_symbols).toEqual(blast.changed_symbols);
+    expect(sc.downstream).toEqual(blast.downstream);
+    expect(sc.summary).toBe(blast.summary);
+    expect(sc.degraded).toBe(true);
+    expect(sc.reason).toBe('index_partial');
+    // content mirrors structuredContent as JSON text (house pattern).
+    expect(JSON.parse(result.content![0]!.text)).toEqual(sc);
+  });
+
+  it('unknown PR → isError listing candidates', async () => {
+    const { handler } = handlerWith(routes);
+    const result = await callTool(handler, 'get-blast-radius', {
+      repo: 'acme/payments-api',
+      pr_number: 999,
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content![0]!.text).toBe('Unknown PR #999. Available: #482');
   });
 });

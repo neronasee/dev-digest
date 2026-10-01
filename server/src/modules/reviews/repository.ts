@@ -96,6 +96,11 @@ export class ReviewRepository {
     return reviewRepo.reviewsForPull(this.db, prId);
   }
 
+  /** Findings of ONLY the newest review (Smart Diff's scoped read). */
+  newestReviewFindings(prId: string): Promise<FindingRow[]> {
+    return reviewRepo.newestReviewFindings(this.db, prId);
+  }
+
   // ---- PR-list rollup read surface (B2; consumed by the pulls module via
   // container.reviewRepo — pulls never queries these tables itself) ----------
 

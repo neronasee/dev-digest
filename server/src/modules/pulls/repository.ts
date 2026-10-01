@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import type { PrMeta } from '@devdigest/shared';
 import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
@@ -220,6 +220,37 @@ export class PullsRepository {
 
   async listFiles(prId: string): Promise<PrFileRow[]> {
     return this.db.select().from(t.prFiles).where(eq(t.prFiles.prId, prId));
+  }
+
+  /**
+   * L04 blast history — MERGED PRs of the same repo, older than
+   * `beforeNumber`, that share at least one of `paths`. One inner-join select
+   * over this module's OWN tables (`pull_requests` ⋈ `pr_files`); the flat
+   * `{...pullFields, sharedPath}` rows are regrouped by the blast module's
+   * pure `toPrHistory` helper. `.limit(200)` bounds the read before any
+   * grouping happens (a path many merged PRs share can fan out per file).
+   */
+  async findOverlappingPrs(
+    repoId: string,
+    beforeNumber: number,
+    paths: string[],
+  ): Promise<(PullRow & { sharedPath: string })[]> {
+    if (paths.length === 0) return [];
+    const rows = await this.db
+      .select({ pr: t.pullRequests, sharedPath: t.prFiles.path })
+      .from(t.pullRequests)
+      .innerJoin(t.prFiles, eq(t.prFiles.prId, t.pullRequests.id))
+      .where(
+        and(
+          eq(t.pullRequests.repoId, repoId),
+          eq(t.pullRequests.status, 'merged'),
+          lt(t.pullRequests.number, beforeNumber),
+          inArray(t.prFiles.path, paths),
+        ),
+      )
+      .orderBy(desc(t.pullRequests.number))
+      .limit(200);
+    return rows.map((r) => ({ ...r.pr, sharedPath: r.sharedPath }));
   }
 
   async listCommits(prId: string): Promise<PrCommitRow[]> {

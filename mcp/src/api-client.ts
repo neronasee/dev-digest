@@ -9,12 +9,14 @@
 
 import type {
   AgentSummary,
+  BlastRadius,
   ConventionCandidate,
   PrMeta,
   Repo,
   ReviewRecord,
   ReviewRunResponse,
   RunRequest,
+  RunSummary,
 } from '@devdigest/shared';
 
 export class ApiClientError extends Error {
@@ -42,7 +44,9 @@ export interface ApiClient {
   listPulls(repoId: string): Promise<PrMeta[]>; // GET /repos/:repoId/pulls
   runReview(prId: string, body: RunRequest): Promise<ReviewRunResponse>; // POST /pulls/:prId/review
   listReviews(prId: string): Promise<ReviewRecord[]>; // GET /pulls/:prId/reviews
+  listRuns(prId: string): Promise<RunSummary[]>; // GET /pulls/:prId/runs
   listConventions(repoId: string): Promise<ConventionCandidate[]>; // GET /repos/:repoId/conventions
+  getBlastRadius(prId: string): Promise<BlastRadius>; // GET /pulls/:prId/blast
 }
 
 /** The structured API error envelope (see @devdigest/shared ApiErrorBody). */
@@ -125,6 +129,8 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     listPulls: (repoId) => get<PrMeta[]>(`/repos/${repoId}/pulls`),
     runReview: (prId, body) => post<ReviewRunResponse>(`/pulls/${prId}/review`, body),
     listReviews: (prId) => get<ReviewRecord[]>(`/pulls/${prId}/reviews`),
+    listRuns: (prId) => get<RunSummary[]>(`/pulls/${prId}/runs`),
     listConventions: (repoId) => get<ConventionCandidate[]>(`/repos/${repoId}/conventions`),
+    getBlastRadius: (prId) => get<BlastRadius>(`/pulls/${prId}/blast`),
   };
 }

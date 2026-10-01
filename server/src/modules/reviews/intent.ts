@@ -45,8 +45,8 @@ const DOC_CHAR_CAP = 6_000;
 const MAX_DOCS = 3;
 /** Max changed paths listed in the diff summary. */
 const DIFF_PATHS_CAP = 20;
-/** Cheap-call caps (scan.ts precedent: temperature 0, 500 tokens, 15s, 1 retry). */
-const INTENT_MAX_TOKENS = 500;
+/** Include room for the full classification and model reasoning tokens. */
+const INTENT_MAX_TOKENS = 2_048;
 const INTENT_TIMEOUT_MS = 15_000;
 const INTENT_MAX_RETRIES = 1;
 

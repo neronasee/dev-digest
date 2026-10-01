@@ -15,18 +15,24 @@ import { registerTools } from './tools/index.js';
 const DEFAULT_BASE_URL = process.env.DEVDIGEST_API_BASE ?? 'http://127.0.0.1:3001';
 
 const SERVER_INSTRUCTIONS =
-  'DevDigest local code-review studio. Start reviews with run-agent-on-pr, then poll get-findings with the returned run_id — runs are asynchronous. Resolve repos and agents by their human names; list-agents lists them.';
+  'DevDigest local code-review studio. run-agent-on-pr waits for the review to finish and returns per-run status plus the findings in one call; if it times out, poll get-findings with the returned run_id. Resolve repos and agents by their human names; list-agents lists them.';
 
 export function createServer(options?: {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
+  /** run-agent-on-pr poll cadence in ms (tests shrink it; default 1000). */
+  pollIntervalMs?: number;
 }): McpServer {
   const baseUrl = options?.baseUrl ?? DEFAULT_BASE_URL;
   const server = new McpServer(
     { name: 'devdigest', version: '0.0.0' },
     { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   );
-  registerTools(server, createApiClient({ baseUrl, fetchImpl: options?.fetchImpl }));
+  registerTools(
+    server,
+    createApiClient({ baseUrl, fetchImpl: options?.fetchImpl }),
+    options?.pollIntervalMs,
+  );
   return server;
 }
 

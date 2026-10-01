@@ -2,6 +2,9 @@
  * Wall-clock deadline for a whole LLM call — the last-resort guard that keeps
  * a run from parking on a promise the HTTP layer abandoned.
  *
+ * Layer contract: core, but timer-only — no imports, no I/O; the deadline
+ * exists solely inside the LLM adapter seam (openrouter.ts).
+ *
  * Why it exists: the OpenAI SDK applies its own per-request `timeout` (and
  * retries), but an aborted undici request can settle NEVER — observed live
  * (2026-09-25): a review run sat `running` forever with its awaiting coroutine

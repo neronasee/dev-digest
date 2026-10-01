@@ -234,8 +234,8 @@ export class ReviewService {
    * Pure DB reads + pure classification — no LLM, no adapters.
    *
    * PINNED (specs/05-smart-diff.md): "findings of the last review" = the
-   * findings of the single newest `reviews` row (reviewsForPull is
-   * created_at desc → rows[0]); the client computes the identical set as
+   * findings of the single newest `reviews` row (newestReviewFindings enforces
+   * created_at desc limit 1 in SQL); the client computes the identical set as
    * `reviews[0]?.findings ?? []`. Accept/dismiss state never changes
    * membership; findings on files absent from `pr_files` are ignored for
    * line marking (they cannot anchor anywhere).
@@ -243,11 +243,10 @@ export class ReviewService {
   async smartDiffForPull(workspaceId: string, prId: string): Promise<SmartDiff> {
     const pull = await this.repo.getPull(workspaceId, prId);
     if (!pull) throw new NotFoundError('Pull request not found');
-    const [files, reviewRows] = await Promise.all([
+    const [files, newestFindings] = await Promise.all([
       this.repo.getPrFiles(prId),
-      this.repo.reviewsForPull(prId),
+      this.repo.newestReviewFindings(prId),
     ]);
-    const newestFindings = reviewRows[0]?.findings ?? [];
     return buildSmartDiff(
       files.map((f) => ({ path: f.path, additions: f.additions, deletions: f.deletions })),
       newestFindings.map((f) => ({ file: f.file, start_line: f.startLine })),

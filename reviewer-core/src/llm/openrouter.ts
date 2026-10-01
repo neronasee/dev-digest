@@ -92,6 +92,8 @@ export class OpenRouterProvider implements LLMProvider {
     let tokensOut = 0;
     let costFromApi: number | null = null;
     let lastRaw = '';
+    let maxTokens = req.maxTokens;
+    let lastFinishReason: string | null | undefined;
     // Last schema-validation failure from parseWithRepair (structured.ts's
     // formatted issue list) — carried into the final thrown error so callers
     // see WHY the last attempt was rejected, not just that it was.
@@ -102,11 +104,14 @@ export class OpenRouterProvider implements LLMProvider {
         model: req.model,
         messages,
         temperature: req.temperature ?? 0,
-        ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
+        ...(maxTokens ? { max_tokens: maxTokens } : {}),
         response_format: {
           type: 'json_schema',
           json_schema: { name: req.schemaName, schema: jsonSchema.schema, strict: true },
         },
+        // OpenRouter otherwise may silently route to a provider that ignores
+        // response_format, despite our request for a strict JSON schema.
+        ...(this.id === 'openrouter' ? { provider: { require_parameters: true } } : {}),
         // OpenRouter session grouping — extra body field (spread is exempt from
         // excess-property checks). Only sent when talking to OpenRouter.
         ...(this.id === 'openrouter' && req.sessionId ? { session_id: req.sessionId } : {}),
@@ -123,6 +128,7 @@ export class OpenRouterProvider implements LLMProvider {
         throw new Error(`OpenRouter returned no choices for ${req.schemaName}${errMsg ? `: ${errMsg}` : ''}`);
       }
       lastRaw = choice.message?.content ?? '';
+      lastFinishReason = choice.finish_reason;
       tokensIn += res.usage?.prompt_tokens ?? 0;
       tokensOut += res.usage?.completion_tokens ?? 0;
       // `usage.cost` is an OpenRouter extension (USD), absent from the OpenAI SDK type.
@@ -141,13 +147,23 @@ export class OpenRouterProvider implements LLMProvider {
           attempts: attempt,
         };
       }
+      if (choice.finish_reason === 'length' && maxTokens) {
+        // A truncated string cannot be repaired with the same token budget.
+        // Retry from the original prompt with room to finish the whole JSON.
+        maxTokens = Math.min(maxTokens * 2, 16_384);
+        lastParseError = `${parsed.error} (finish_reason: length)`;
+        continue;
+      }
       messages.push({ role: 'assistant', content: lastRaw });
       messages.push({ role: 'user', content: parsed.repromptMessage });
       lastParseError = parsed.error;
     }
     throw new Error(
       `OpenRouter structured output failed schema validation for ${req.schemaName}` +
-        (lastParseError ? `: ${lastParseError}` : ''),
+        (lastParseError ? `: ${lastParseError}` : '') +
+        (lastFinishReason === 'length' && !lastParseError?.includes('finish_reason: length')
+          ? ' (finish_reason: length)'
+          : ''),
     );
   }
 

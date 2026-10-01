@@ -10,9 +10,9 @@ import { registerGetFindingsTool } from './get-findings.js';
 import { registerGetConventionsTool } from './get-conventions.js';
 import { registerGetBlastRadiusTool } from './get-blast-radius.js';
 
-export function registerTools(server: McpServer, client: ApiClient): void {
+export function registerTools(server: McpServer, client: ApiClient, pollIntervalMs?: number): void {
   registerListAgentsTool(server, client);
-  registerRunAgentOnPrTool(server, client);
+  registerRunAgentOnPrTool(server, client, pollIntervalMs);
   registerGetFindingsTool(server, client);
   registerGetConventionsTool(server, client);
   registerGetBlastRadiusTool(server, client);

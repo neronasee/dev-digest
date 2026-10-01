@@ -42,6 +42,8 @@ classification is additive per file.
 | `reviewer-core/src/llm/structured.ts` | zod, onion-architecture (core purity) | core: npm test + typecheck; server `depcruise:all` |
 | `reviewer-core/src/**` (all other) | onion-architecture (`core-is-pure`) | core: npm test + typecheck; server `depcruise:all` |
 | `reviewer-core/test/**` | none (naming invariant C6) | core: npm test + typecheck |
+| `mcp/src/**` | typescript-expert, zod (schema hunks) | mcp: npm run typecheck + npm test |
+| `mcp/test/**` | none (naming invariant C6) | mcp: npm run typecheck + npm test |
 | `reviewer-core/{tsconfig,package}.json` | typescript-expert | core: typecheck (+ invariant C2) |
 | `e2e/specs/*.flow.json` | none (naming invariant C6 only) | e2e: typecheck; flow-name regex |
 | `e2e/lib/**` | none | e2e: typecheck (npm test only if hermetic stack is up) |
@@ -74,6 +76,7 @@ a warning that names a changed file → one WARNING.
 | any `reviewer-core/` file | `npm test`; `npm run typecheck`; then `pnpm depcruise:all` from `server/` | `depcruise:all` is the core-purity gate |
 | any `client/` file | `pnpm typecheck`; `pnpm test` | tests are jsdom + fetch-mocked, hermetic |
 | any `e2e/` file | `npm run typecheck` | `npm test` needs the `./scripts/e2e.sh` stack — skip unless it is already up, and say so in the report |
+| any `mcp/` file | `npm run typecheck`; `npm test` (both in mcp/) | hermetic — no Docker, no live API |
 | either `src/vendor/shared/` | `diff -r server/src/vendor/shared client/src/vendor/shared`; `pnpm typecheck` in BOTH server and client (even the untouched one) | non-empty `diff -r` output → CRITICAL (invariant C3) |
 
 ## Table C — invariants (deterministic severities, no model judgment)
@@ -81,7 +84,7 @@ a warning that names a changed file → one WARNING.
 | # | Rule | Check | Severity / category |
 |---|---|---|---|
 | C1 | Applied migrations are append-only history | `git diff --name-status origin/main -- server/src/db/migrations/`: M or D on a `.sql` file that exists in the base → violation. M on `meta/_journal.json` **with no A-status `.sql`** in the same diff → violation (history rewrite). A new `.sql` + M on `_journal.json` is the normal `pnpm db:generate` append — allowed, review its content with drizzle-orm-patterns | CRITICAL / bug |
-| C2 | Lockfiles change only through the package manager | lockfile modified without a sibling `package.json` change to `dependencies`, `devDependencies`, or `peerDependencies` → violation (4 lockfiles: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`, `reviewer-core/package-lock.json`, `e2e/package-lock.json`; unrelated script/metadata edits do not justify lockfile churn). Reverse direction — one of those dependency fields changed but the lockfile is NOT in the diff → warning (run the package manager) | CRITICAL / bug (WARNING for the reverse direction) |
+| C2 | Lockfiles change only through the package manager | lockfile modified without a sibling `package.json` change to `dependencies`, `devDependencies`, or `peerDependencies` → violation (5 lockfiles: `server/pnpm-lock.yaml`, `client/pnpm-lock.yaml`, `reviewer-core/package-lock.json`, `e2e/package-lock.json`, `mcp/package-lock.json`; unrelated script/metadata edits do not justify lockfile churn). Reverse direction — one of those dependency fields changed but the lockfile is NOT in the diff → warning (run the package manager) | CRITICAL / bug (WARNING for the reverse direction) |
 | C3 | Vendored contracts stay byte-identical server↔client | Table B vendor-sync check when either vendor dir is touched | CRITICAL / bug |
 | C4 | No secrets in the diff | scan ADDED lines for credential-shaped values (a prefix plus a plausible non-placeholder payload), not bare token names in documentation. Check OpenAI, GitHub, AWS, Slack, private-key, and literal-password patterns outside `server/src/adapters/secrets/`; exclude this rule's own pattern-description row from matches | CRITICAL / security |
 | C5 | INJECTION_GUARD intact | diff touches the guard text in `server/src/prompts/**` | CRITICAL / security |

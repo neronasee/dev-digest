@@ -1,0 +1,52 @@
+# mcp suite — the DevDigest MCP server (@devdigest/mcp).
+# Five stdio tools wrapping the local Fastify review API for coding agents.
+# Tests are hermetic (SDK in-process handler, fetch stubbed). Uses npm
+# (package-lock.json).
+#
+# server/src/vendor/shared/** is in the path filter because mcp/ aliases
+# @devdigest/shared to it at type-check time. The local zod pin (plus the
+# zod-v4 npm alias) keeps the install self-contained in mcp/ — no
+# server/reviewer-core install step is needed.
+name: mcp
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+  pull_request:
+    paths:
+      - 'mcp/**'
+      - 'server/src/vendor/shared/**'
+      - '.github/workflows/mcp.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test

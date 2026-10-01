@@ -77,6 +77,11 @@ export interface PromptParts {
    * undefined → section omitted.
    */
   prDescription?: string;
+  /**
+   * Composed PR-intent block (untrusted, derived from PR metadata). Rendered
+   * right after the PR description. Empty/undefined → section omitted.
+   */
+  intent?: string;
   /** The unified diff / user task (untrusted content). */
   diff: string;
   /** Optional task framing line, e.g. "Review PR #482 '…'". */
@@ -111,11 +116,16 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     parts.prDescription && parts.prDescription.trim().length > 0
       ? clampPrDescription(parts.prDescription)
       : undefined;
+  const intentBlock =
+    parts.intent && parts.intent.trim().length > 0 ? parts.intent : undefined;
 
   const userSections: string[] = [];
   if (parts.task) userSections.push(parts.task);
   if (prDescription) {
     userSections.push(`## PR description\n${wrapUntrusted('pr-description', prDescription)}`);
+  }
+  if (intentBlock) {
+    userSections.push(`## PR intent\n${wrapUntrusted('intent', intentBlock)}`);
   }
   if (skillsBlock) userSections.push(`## Skills / rules\n${skillsBlock}`);
   if (memoryBlock) userSections.push(`## Relevant memory\n${memoryBlock}`);
@@ -145,6 +155,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
     callers: parts.callers ?? null,
     repo_map: parts.repoMap ?? null,
     pr_description: prDescription ?? null,
+    intent: intentBlock ?? null,
     user,
   };
 

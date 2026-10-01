@@ -6,6 +6,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import { MockLLMProvider, MockEmbedder, MockGitClient } from '../src/adapters/mocks.js';
+import { intentLlmOverride, intentGithubOverride } from './helpers/intent.js';
 import * as t from '../src/db/schema.js';
 import type { Review } from '@devdigest/shared';
 
@@ -100,7 +101,10 @@ d('skills in the review prompt (Testcontainers pg)', () => {
       overrides: {
         embedder: new MockEmbedder(),
         git: new MockGitClient({ diff: DIFF }),
-        llm: { openai: llm },
+        // Intent pre-work (openrouter feature model + GitHub fetch) — mocked
+        // so rounds never hit real providers via server/.env.
+        github: intentGithubOverride(),
+        llm: { openai: llm, ...intentLlmOverride() },
       },
     });
   }

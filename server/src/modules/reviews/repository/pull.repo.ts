@@ -7,8 +7,8 @@
 import { and, eq } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../../db/client.js';
 import * as t from '../../../db/schema.js';
-import type { Intent } from '@devdigest/shared';
-import type { PrFileRow, PullRow, RepoRow } from '../../../db/rows.js';
+import type { PrIntentDetail } from '@devdigest/shared';
+import type { PrFileRow, PrIntentWrite, PullRow, RepoRow } from '../../../db/rows.js';
 
 // ---- PR lookup (workspace-scoped) -----------------------------------------
 
@@ -46,23 +46,75 @@ export async function markReviewed(db: DbOrTx, prId: string, sha: string): Promi
 
 // ---- intent ---------------------------------------------------------------
 
-export async function upsertIntent(db: Db, prId: string, intent: Intent): Promise<void> {
+/**
+ * Upsert one derivation over the previous row (derive-every-round overwrite —
+ * no staleness cache). Feedback resets on re-derive: the new classification
+ * has not been judged yet. Single-row upsert, so direct values in `set:` are
+ * correct (per-row `excluded.` refs are only required for multi-row batches).
+ */
+export async function upsertIntent(db: Db, prId: string, w: PrIntentWrite): Promise<void> {
+  const values = {
+    prId,
+    intent: w.intent,
+    reasoning: w.reasoning,
+    evidenceUsed: w.evidence_used,
+    inScope: w.in_scope,
+    outOfScope: w.out_of_scope,
+    category: w.category,
+    breakingChange: w.breaking_change,
+    confidence: w.confidence,
+    inferred: w.inferred,
+    sources: w.sources,
+    model: w.model,
+    costUsd: w.costUsd,
+    derivedAt: new Date(),
+    feedback: null,
+    feedbackNote: null,
+  };
   await db
     .insert(t.prIntent)
-    .values({
-      prId,
-      intent: intent.intent,
-      inScope: intent.in_scope,
-      outOfScope: intent.out_of_scope,
-    })
-    .onConflictDoUpdate({
-      target: t.prIntent.prId,
-      set: { intent: intent.intent, inScope: intent.in_scope, outOfScope: intent.out_of_scope },
-    });
+    .values(values)
+    .onConflictDoUpdate({ target: t.prIntent.prId, set: values });
 }
 
-export async function getIntent(db: Db, prId: string): Promise<Intent | undefined> {
+/** The stored derivation as the served contract shape; undefined when absent. */
+export async function getIntentDetail(
+  db: Db,
+  prId: string,
+): Promise<PrIntentDetail | undefined> {
   const [row] = await db.select().from(t.prIntent).where(eq(t.prIntent.prId, prId));
   if (!row) return undefined;
-  return { intent: row.intent, in_scope: row.inScope, out_of_scope: row.outOfScope };
+  return {
+    reasoning: row.reasoning,
+    intent: row.intent,
+    category: row.category,
+    breaking_change: row.breakingChange,
+    in_scope: row.inScope,
+    out_of_scope: row.outOfScope,
+    confidence: row.confidence,
+    evidence_used: row.evidenceUsed,
+    pr_id: row.prId,
+    inferred: row.inferred,
+    sources: row.sources,
+    model: row.model,
+    cost_usd: row.costUsd,
+    derived_at: row.derivedAt.toISOString(),
+    feedback: row.feedback,
+    feedback_note: row.feedbackNote,
+  };
+}
+
+/** Record open user feedback on the derivation; false when no row exists. */
+export async function setIntentFeedback(
+  db: Db,
+  prId: string,
+  verdict: 'correct' | 'incorrect',
+  note: string | undefined,
+): Promise<boolean> {
+  const rows = await db
+    .update(t.prIntent)
+    .set({ feedback: verdict, feedbackNote: note ?? null })
+    .where(eq(t.prIntent.prId, prId))
+    .returning();
+  return rows.length > 0;
 }

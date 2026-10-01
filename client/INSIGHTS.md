@@ -5,7 +5,8 @@ in practice, "why it's built this way", debugging dead ends.
 
 Contract:
 
-- Append only — never rewrite, reword, or prune existing entries.
+- Append only — never rewrite, reword, or prune existing entries (curation is
+  the insights-curator agent's exclusive, user-invoked job — `/curate-insights`).
 - One dated bullet per insight, newest on top of its section:
   `- YYYY-MM-DD — one actionable sentence. (<file>:<line> or dir/PR ref)`
 - If it belongs in the README, `docs/`, or a `specs/` file instead — put it there.

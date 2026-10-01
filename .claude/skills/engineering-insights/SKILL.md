@@ -76,8 +76,9 @@ Nothing substantial learned → write nothing. Signal over volume.
 
 1. **Dedup**: read the target section first; if an equivalent entry exists
    (even worded differently), skip.
-2. **Append-only**: never rewrite, reword, or prune existing entries — pruning
-   is a periodic human task, never part of capture.
+2. **Append-only**: never rewrite, reword, or prune existing entries — curation
+   (merge/prune/re-date) is the insights-curator agent's exclusive job,
+   user-invoked via `/curate-insights`, never part of capture.
 3. **Redirect**: README/docs/specs material goes there instead (e2e: flow specs).
 4. **One insight → one file**: the module where it bites. If it genuinely spans
    modules, pick where it bites hardest and name the other module inside the

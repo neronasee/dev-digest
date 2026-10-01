@@ -7,6 +7,7 @@ import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './reposit
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
 import { loadDiff } from './diff-loader.js';
+import { composeIntentBlock, deriveIntent } from './intent.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -35,9 +36,10 @@ export type RunOutcome = {
 
 /**
  * Owns the background execution of queued agent runs (extracted from
- * ReviewService; behaviour unchanged). Loads the diff + intent once, then
- * map-reduces each agent, streaming events over the runBus and persisting each
- * review. Per-agent failures are isolated.
+ * ReviewService). Loads the diff + derives the PR intent ONCE (fail-open —
+ * a derivation error degrades the round to review-without-intent, never fails
+ * it), then map-reduces each agent, streaming events over the runBus and
+ * persisting each review. Per-agent failures are isolated.
  */
 export class ReviewRunExecutor {
   constructor(
@@ -105,6 +107,11 @@ export class ReviewRunExecutor {
     }
     runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
 
+    // Intent derivation (Intent Layer): shared pre-work like the diff, so it
+    // runs ONCE per round (derive-every-round upsert — no staleness cache) and
+    // the composed block reaches every agent's prompt + trace.
+    const intentBlock = await this.deriveIntentOrLog(workspaceId, pull, repo, diff, runLog);
+
     for (const { agent, runId } of jobs) {
       // A queued run may have been cancelled while a previous agent was using
       // the provider. Claim it atomically; if it is no longer queued, do no
@@ -116,7 +123,7 @@ export class ReviewRunExecutor {
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, intentBlock, agent, runId, runLog);
         logger?.info(
           {
             runId,
@@ -139,12 +146,46 @@ export class ReviewRunExecutor {
     }
   }
 
+  /**
+   * Derive + persist the PR intent for the round, composing the prompt block.
+   * FAIL-OPEN by contract: any error (or a null derivation) logs the degraded
+   * line and returns undefined — a queued run is NEVER failed by intent.
+   */
+  private async deriveIntentOrLog(
+    workspaceId: string,
+    pull: PullRow,
+    repo: RepoRow,
+    diff: UnifiedDiff,
+    runLog: RunLogger,
+  ): Promise<string | undefined> {
+    const t0 = Date.now();
+    runLog.tool('intent…');
+    try {
+      const record = await deriveIntent(this.container, workspaceId, pull, repo, diff);
+      if (!record) {
+        runLog.error('intent failed — reviewing without intent (degraded)');
+        return undefined;
+      }
+      await this.repo.upsertIntent(pull.id, record);
+      runLog.result(
+        `intent done (${Date.now() - t0}ms · ${record.model ?? 'unknown'} · ${
+          record.costUsd != null ? `$${record.costUsd.toFixed(4)}` : 'cost unknown'
+        })`,
+      );
+      return composeIntentBlock(record);
+    } catch {
+      runLog.error('intent failed — reviewing without intent (degraded)');
+      return undefined;
+    }
+  }
+
   /** Execute a single agent's review against a PR, streaming progress. */
   private async runOneAgent(
     workspaceId: string,
     pull: PullRow,
     repo: RepoRow,
     diff: UnifiedDiff,
+    intentBlock: string | undefined,
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
@@ -228,6 +269,11 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Intent Layer — the composed PR-intent block (untrusted, derived).
+        // assemblePrompt wraps it right after the PR description; recorded in
+        // the trace via outcome.assembly.intent. Omitted when derivation
+        // degraded (fail-open).
+        ...(intentBlock ? { intent: intentBlock } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),

@@ -75,6 +75,13 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /**
+   * Composed PR-intent block (untrusted; derived server-side from PR metadata
+   * and delimiter-wrapped in the prompt, right after the PR description).
+   * Empty/undefined → section omitted. No cap here — the server composes a
+   * bounded block; the engine treats it as an opaque string.
+   */
+  intent?: string;
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -156,6 +163,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 

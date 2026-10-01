@@ -5,7 +5,8 @@ in practice, "why it's built this way", debugging dead ends.
 
 Contract:
 
-- Append only — never rewrite, reword, or prune existing entries.
+- Append only — never rewrite, reword, or prune existing entries (curation is
+  the insights-curator agent's exclusive, user-invoked job — `/curate-insights`).
 - One dated bullet per insight, newest on top of its section:
   `- YYYY-MM-DD — one actionable sentence. (<file>:<line> or dir/PR ref)`
 - If it belongs in the README, `docs/`, or a `specs/` file instead — put it there.
@@ -24,12 +25,14 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-24 — A JSDoc comment containing a backtick-quoted path glob like `*/specs/` terminates the block comment EARLY at the embedded `*/`, and the leftover suffix then parses as code — cascading into misleading "unterminated template literal" / "Expected ';' but found '{'" errors dozens of lines away from the real site (bisect by neutralizing backtick-bearing lines one at a time, not by reading the reported line). (src/modules/reviews/intent.ts findDocRefs doc-comment)
 - 2026-09-21 — Don't assert trace existence off a run row's terminal status: `runOneAgent` flips `agent_runs` to done BEFORE `saveRunTrace` writes the document (the SSE `complete` fires after the save, so live clients are fine), and a test that selects `run_traces` right after `waitForPrRuns` races the write — poll for the trace row instead. (src/modules/reviews/run-executor.ts, test/runs-skills.it.test.ts)
 
 ## Codebase Patterns
 
 <!-- newest on top -->
 
+- 2026-09-24 — A repository importing a TYPE from its module's own application layer still closes a depcruise no-circular cycle (repository → intent → _shared/feature-models → container → repository; type-only imports count), so a table's write-shape type (PrIntentWrite) lives in db/rows.ts beside its row type and the application file merely re-exports it. (src/db/rows.ts, src/modules/reviews/intent.ts)
 - 2026-09-22 — A new PORT in vendored @devdigest/shared must be mirrored into client/src/vendor/shared even when the client will never implement it (UrlFetcher is server-only): CI diffs the WHOLE vendor tree (`diff -rq` in server-unit.yml/client.yml), so an unmirrored port fails both pipelines, not just the server's. (src/vendor/shared/adapters.ts)
 - 2026-09-22 — `no-cross-module-internals` fires on PURE helper imports too (reviews/run-executor → skills/helpers landed as an error-severity edge in da939f0 and sat red until fixed): the house fix for a cross-module pure function is a container delegation method (`container.skillsForPrompt(...args)`), because the composition root MAY import module internals (it already news up their repositories) — the rule only binds modules→modules. (src/platform/container.ts, src/modules/reviews/run-executor.ts)
 - 2026-09-21 — A seeded PR whose `pr_files` rows have no `patch` produces an EMPTY review diff: `loadDiff` prefers a real git diff (fails on clonePath null), then `diffFromPrFiles` skips patch-less files entirely — PR #482 seeds exactly this way; experiment PRs #483/#484 carry real unified-diff hunks (headers excluded — `diffFromPrFiles` re-adds them; grounding only accepts citations inside hunk line ranges). (src/modules/reviews/diff-loader.ts, src/db/seed-diffs.ts)
@@ -66,6 +69,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-24 — A review-round it-test that mocks only `llm.openai` silently runs the intent pre-work against REAL providers: `server/.env` (loaded by `dotenv/config`) carries live OPENROUTER_API_KEY/GITHUB_TOKEN, so an unoverridden `container.llm('openrouter')`/`container.github()` put a ~5s BILLED OpenRouter call plus GitHub lookups into every round BEFORE any run claims 'running' — runs sit 'queued' past the polling windows with zero LLM calls recorded. Any suite whose round touches a new adapter must mock it (helpers/intent.ts); diagnose by dumping `container.runBus.buffer(runId)` (timestamps per event), not the failing assertion. (test/helpers/intent.ts, test/reviews.it.test.ts)
 - 2026-09-21 — `expected undefined to be 1` on a freshly-injected DTO field inside an .it test is usually the request having 409'd/422'd, not a mapper bug: `app.inject(...).json()` returns the `{error: ...}` envelope on failure, and within one suite the DB is SHARED across `it` blocks, so a second `POST /skills` with the same name hits the duplicate-name 409 — unique-ify seed names per test. (test/skills-crud.it.test.ts)
 - 2026-09-20 — `pnpm typecheck` in server/ failing with `TS2307: Cannot find module 'openai'/'zod'` pointed at `../reviewer-core/src/...` files means reviewer-core's `node_modules` is missing, not a server dep problem — server's tsconfig path-alias compiles reviewer-core TypeScript sources directly, so any fresh checkout/worktree must `npm install` in reviewer-core/ before server typecheck (or vitest) can run. (server/tsconfig.json paths → ../reviewer-core/src)
 - 2026-09-16 — `pnpm db:migrate` failing with `column "cost_usd" … already exists` on the dev DB means the DB drifted onto a foreign migration history (leftover fork volume: extra journal hashes + extra columns) — drop/recreate the `devdigest` database (it only holds seed data), re-run migrate + seed; DROP DATABASE first terminates the idle `postgres.js` pool session held by the running dev API or it fails with "being accessed by other users" (the pool reconnects on next query, no API restart needed). (src/db/migrations/)

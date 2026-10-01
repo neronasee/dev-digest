@@ -3,8 +3,9 @@
  * (`createMcpHandler(() => createServer({ fetchImpl: stub })`), driven by a
  * fetch-shaped JSON-RPC transport: every request is a `new Request(...)` fed
  * to `handler.fetch`. Asserts the five-tool surface, fixed order, read-only
- * hints, the two zero-arg tools, and get-conventions' client-side status/limit
- * filtering. Hermetic — the API is a route stub.
+ * hints, the zero-arg list tool, get-blast-radius' resolver chain, and
+ * get-conventions' client-side status/limit filtering. Hermetic — the API is a
+ * route stub.
  */
 import { describe, expect, it } from 'vitest';
 import { createMcpHandler } from '@modelcontextprotocol/server';
@@ -180,11 +181,29 @@ describe('zero-arg and simple tools', () => {
     expect(result.content![0]!.text).toBe(JSON.stringify(result.structuredContent));
   });
 
-  it('get-blast-radius accepts {} and returns a non-error not_implemented stub', async () => {
-    const result = await callTool(makeHandler(), 'get-blast-radius', {});
+  it('get-blast-radius resolves repo → PR and passes the blast payload through', async () => {
+    const blast = {
+      changed_symbols: [{ name: 'refundPayment', file: 'src/payments/refund.ts', kind: 'function' }],
+      downstream: [],
+      summary: '1 changed symbol(s), 0 downstream caller(s), 0 impacted endpoint(s), 0 impacted cron job(s)',
+    };
+    const handler = createMcpHandler(() =>
+      createServer({
+        fetchImpl: stubFetch({
+          ...routes,
+          '/repos/repo-1/pulls': [{ id: 'pr-482', number: 482, title: 'PR 482', status: 'open' }],
+          '/pulls/pr-482/blast': blast,
+        }),
+      }),
+    );
+    const result = await callTool(handler, 'get-blast-radius', {
+      repo: 'acme/payments-api',
+      pr_number: 482,
+    });
     expect(result.isError).toBeFalsy();
-    expect(result.structuredContent!.status).toBe('not_implemented');
-    expect(String(result.structuredContent!.message)).toContain('L04');
+    expect(result.structuredContent!.repo).toBe('acme/payments-api');
+    expect(result.structuredContent!.pr_number).toBe(482);
+    expect(result.structuredContent!.summary).toBe(blast.summary);
   });
 
   it('get-conventions filters by triage status client-side', async () => {

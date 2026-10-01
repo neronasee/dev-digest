@@ -26,7 +26,8 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-10-01 — run-agent-on-pr blocks on 1s polling of `GET /pulls/:id/runs`; the cadence is injectable via `createServer({ pollIntervalMs })` (threaded registerTools → registerRunAgentOnPrTool) so hermetic tests poll at 5ms — any future polling/waiting tool should thread its interval the same way instead of sleeping the suite for real seconds. (src/tools/run-agent-on-pr.ts, src/index.ts)
+- 2026-09-28 — Adding a method to the `ApiClient` interface ripples into EVERY hand-rolled fake: `test/resolve.test.ts`'s `mkClient` fails typecheck until it grows the new stub, and `test/server.test.ts` may pin the OLD tool behavior (it asserted get-blast-radius' not_implemented stub) — grep the whole test tree for the tool/fake before an interface or tool rewrite. (src/api-client.ts, test/resolve.test.ts, test/server.test.ts)
 
 ## Tool & Library Notes
 
@@ -41,6 +42,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-09-29 — A zod-invalid tool argument (e.g. `agent: ""` against `.min(1)`) comes back from the SDK as an ERRORED TOOL RESULT, not a JSON-RPC `error` — assert `result.isError` (and that the handler's stubbed fetch saw zero calls), never `expect(error).toBeDefined()`. (test/tools.test.ts:212)
 - 2026-09-26 — `/mcp` → "Failed to reconnect: CONNECTION_CLOSED" meant this Claude Code build passes `.mcp.json` args through **unexpanded** — node got the literal `${CLAUDE_PROJECT_DIR}/mcp/...` path and died MODULE_NOT_FOUND in 30ms (proof: `~/.cache/claude-cli-nodejs/<project-slug>/mcp-logs-devdigest/*.jsonl`); the spawn cwd IS the project root, so bare relative args (`mcp/node_modules/tsx/dist/cli.mjs`, `mcp/src/index.ts`) are the fix, superseding the What Works entry below. (.mcp.json:4)
 - 2026-09-26 — Adding `test/**/*.ts` to tsconfig `include` (tests were previously never type-checked) surfaced TS2571 on pre-existing assertions: one property read into `structuredContent: Record<string, unknown>` typechecks, but a chain like `sc.summary.total` doesn't — cast the intermediate (`sc.summary as Record<string, unknown>`) where the code reads two levels deep. (test/tools.test.ts:281, tsconfig.json:28)
 

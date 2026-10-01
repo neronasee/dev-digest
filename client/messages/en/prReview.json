@@ -13,6 +13,7 @@
     "breakingChange": "breaking change",
     "emptyTitle": "No intent yet",
     "emptyBody": "Run a review to derive intent",
+    "loadFailed": "Couldn't load the intent — try again.",
     "feedback": {
       "correct": "Correct",
       "incorrect": "Incorrect",

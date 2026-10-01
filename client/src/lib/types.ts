@@ -54,3 +54,12 @@ export type {
   IntentEvidenceSource,
   IntentFeedbackInput,
 } from "@devdigest/shared";
+export type {
+  BlastRadius,
+  BlastDegradedReason,
+  ChangedSymbol,
+  DownstreamImpact,
+  BlastCaller,
+  PrHistory,
+  PrHistoryItem,
+} from "@devdigest/shared";

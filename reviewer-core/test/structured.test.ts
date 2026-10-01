@@ -106,6 +106,34 @@ describe('parseWithRepair', () => {
 });
 
 describe('structured review citation validation', () => {
+  it('retries truncated JSON with more output tokens and a schema-capable route', async () => {
+    const Schema = z.object({ reasoning: z.string(), intent: z.string() });
+    const create = vi.fn()
+      .mockResolvedValueOnce({
+        choices: [{ finish_reason: 'length', message: { content: '{"reasoning":"unfinished' } }],
+        usage: { prompt_tokens: 5, completion_tokens: 500 },
+      })
+      .mockResolvedValueOnce({
+        choices: [{ finish_reason: 'stop', message: { content: '{"reasoning":"done","intent":"fix"}' } }],
+        usage: { prompt_tokens: 5, completion_tokens: 20 },
+      });
+    const provider = new OpenRouterProvider('test');
+    (provider as unknown as { client: unknown }).client = { chat: { completions: { create } } };
+
+    const result = await provider.completeStructured({
+      model: 'model', schema: Schema, schemaName: 'IntentClassification',
+      messages: [{ role: 'user', content: 'classify' }], maxTokens: 500, maxRetries: 1,
+    });
+
+    expect(result.data).toEqual({ reasoning: 'done', intent: 'fix' });
+    expect(result.attempts).toBe(2);
+    expect(create.mock.calls[0]![0]).toMatchObject({
+      max_tokens: 500, provider: { require_parameters: true },
+    });
+    expect(create.mock.calls[1]![0].max_tokens).toBe(1_000);
+    expect(create.mock.calls[1]![0].messages).toHaveLength(1);
+  });
+
   it('rejects line 0 and reprompts before accepting a positive changed line', async () => {
     const make = (line: number) => JSON.stringify({
       verdict: 'comment',

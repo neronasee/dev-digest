@@ -232,9 +232,8 @@ describe('deriveIntentWith (fail-open end to end)', () => {
     expect(record!.model).toBe('deepseek/deepseek-v4-flash');
     expect(record!.costUsd).toBe(0.001);
     expect(record!.sources).toContainEqual({ source: 'plan', detail: PLAN_PATH });
-    // The cheap-call discipline reached the provider.
     const call = llm.calls.find((c) => c.method === 'completeStructured');
-    expect(call).toBeDefined();
+    expect(call?.req.maxTokens).toBe(2_048);
   });
 
   it('no body anywhere → inferred: true and the 0.9 self-report capped to 0.5', async () => {

@@ -45,11 +45,32 @@ compact results — `get-findings` defaults to `limit: 10`, one-line rationale
 
 ## Blast radius (L04)
 
-`get-blast-radius` is a registered stub returning
-`{ status: 'not_implemented', … }` — the course L04 lesson implements it on
-top of repo-intel. The future output shape is the `BlastRadius` contract
-(`server/src/vendor/shared/contracts/brief.ts:39`); it is deliberately not
-imported by the stub.
+`get-blast-radius` wraps `GET /pulls/:id/blast` end to end: `resolveRepoId →
+resolvePullId → getBlastRadius`, payload passed through unchanged (the API
+already clamps per-symbol callers), including the optional `degraded` /
+`reason` fields. The output shape is the `BlastRadius` contract
+(`server/src/vendor/shared/contracts/brief.ts`). Prior PRs are deliberately
+NOT exposed: history is human context on a second route (`GET
+/pulls/:id/history`) and would double the tool's output noise.
+
+## Wait-then-report (run-agent-on-pr)
+
+The API's `POST /pulls/:id/review` is fire-and-forget (run rows created up
+front, execution backgrounded), but the tool blocks: polling
+`GET /pulls/:id/runs` until every triggered run id is terminal keeps the
+model-facing contract one call — trigger, wait, read findings — instead of
+teaching every consumer the poll loop. Design points:
+
+- Terminal = `done`/`failed`/`cancelled`; a missing run row counts as
+  `queued` (the POST created it, so a miss is a race, not an error).
+- `wait_seconds` (default 180, max 600) bounds the block; on timeout the tool
+  degrades to the fire-and-forget shape (run ids + status + poll
+  `get-findings` note) rather than erroring — partial information beats none.
+- Findings shaping is shared with `get-findings` (`summarizeFindings`), so
+  both tools project reviews identically (severity→confidence order, limit
+  slice, 200-char rationale trim).
+- `createServer({ pollIntervalMs })` exists for tests: the 1s production
+  cadence would dominate the hermetic suite's runtime.
 
 ## Testing pattern
 

@@ -4,6 +4,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ApiClient } from '../api-client.js';
+import { fail } from './fail.js';
 
 export function registerListAgentsTool(server: McpServer, client: ApiClient): void {
   server.registerTool(
@@ -39,7 +40,3 @@ export function registerListAgentsTool(server: McpServer, client: ApiClient): vo
 }
 
 /** API/network failures surface as isError text — never thrown at the protocol layer. */
-function fail(e: unknown): { isError: true; content: [{ type: 'text'; text: string }] } {
-  const message = e instanceof Error ? e.message : String(e);
-  return { isError: true, content: [{ type: 'text', text: message }] };
-}

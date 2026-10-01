@@ -11,18 +11,27 @@ Registration order is fixed; `readOnlyHint` marks the read-only surface.
 | # | Tool | Input | Wraps | readOnly |
 |---|------|-------|-------|----------|
 | 1 | `list-agents` | — | `GET /agents` | yes |
-| 2 | `run-agent-on-pr` | `repo`, `pr_number`, `agent?` | `GET /repos` → `GET /repos/:id/pulls` → `GET /agents` → `POST /pulls/:id/review` | no |
+| 2 | `run-agent-on-pr` | `repo`, `pr_number`, `agent?`, `wait_seconds?` (≤ 600, default 180) | `GET /repos` → `GET /repos/:id/pulls` → `GET /agents` → `POST /pulls/:id/review` → poll `GET /pulls/:id/runs` → `GET /pulls/:id/reviews` | no |
 | 3 | `get-findings` | `repo`, `pr_number`, `run_id?`, `severity?`, `limit?` (≤ 50, default 10), `verbose?` | `GET /pulls/:id/reviews` (filters/sorting/trim client-side) | yes |
-| 4 | `get-conventions` | `repo`, `status?` | `GET /repos/:id/conventions` (status filter client-side) | yes |
-| 5 | `get-blast-radius` | — | stub (course L04) | yes |
+| 4 | `get-conventions` | `repo`, `status?`, `limit?` (≤ 50, default 10) | `GET /repos/:id/conventions` (status filter client-side) | yes |
+| 5 | `get-blast-radius` | `repo`, `pr_number` | `GET /pulls/:id/blast` | yes |
 
-## Fire-and-forget polling contract
+## Wait-then-report contract
 
-`POST /pulls/:id/review` is fire-and-forget: it returns run ids immediately
-(`reviews: []`) and executes in the background. `run-agent-on-pr` therefore
-returns `runs: [{ run_id, agent_name, status: 'queued' }]` plus a `note`
-telling the model to poll **`get-findings`** with the `run_id` — that note is
-the polling contract; keep it in sync with `get-findings`' `run_id` filter.
+`POST /pulls/:id/review` is fire-and-forget server-side: it returns run ids
+immediately (`reviews: []`) and executes in the background. `run-agent-on-pr`
+**blocks anyway**: it polls `GET /pulls/:id/runs` (1s interval) until every
+triggered run reaches a terminal status (`done`/`failed`/`cancelled`) or
+`wait_seconds` (default 180, max 600) is exhausted, then returns the outcome in
+one call — per-run `{ run_id, agent_name, status, error?, score, verdict,
+findings_count }` plus the same severity summary / top-findings projection
+`get-findings` produces (limit 10, one-line rationale; the shaping is shared
+via `summarizeFindings` in `get-findings.ts`). Findings are scoped to the
+run ids this trigger created. On timeout the tool degrades to the old
+contract: run ids + current status + a `note` to poll **`get-findings`** with
+the `run_id` — keep that note in sync with `get-findings`' `run_id` filter.
+Harness-side, a tool call that blocks for minutes may need `MCP_TOOL_TIMEOUT`
+raised in the MCP client.
 
 ## Running
 

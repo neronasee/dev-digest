@@ -52,7 +52,6 @@ export function IntentCard({ prId }: { prId: string | null }) {
   const { data: detail, isLoading, error } = usePrIntent(prId);
   const rederive = useRederiveIntent(prId);
   const feedback = useIntentFeedback(prId);
-  const [note, setNote] = React.useState("");
 
   // Absent intent is legitimate: no PR resolved yet, or no review has derived
   // one (404). Both render the same "run a review" empty state.
@@ -82,29 +81,27 @@ export function IntentCard({ prId }: { prId: string | null }) {
       <Card>
         <SectionLabel icon="Target">{t("intent.label")}</SectionLabel>
         <div style={s.marked}>
-          {error instanceof ApiError ? error.message : t("intent.emptyBody")}
+          {error instanceof ApiError ? error.message : t("intent.loadFailed")}
         </div>
       </Card>
     );
   }
 
-  return <IntentCardBody detail={detail} note={note} setNote={setNote} rederive={rederive} feedback={feedback} />;
+  return <IntentCardBody detail={detail} rederive={rederive} feedback={feedback} />;
 }
 
 function IntentCardBody({
   detail,
-  note,
-  setNote,
   rederive,
   feedback,
 }: {
   detail: PrIntentDetail;
-  note: string;
-  setNote: (v: string) => void;
   rederive: ReturnType<typeof useRederiveIntent>;
   feedback: ReturnType<typeof useIntentFeedback>;
 }) {
   const t = useTranslations("prReview");
+  // Feedback note lives here, not in the container: only this body reads it.
+  const [note, setNote] = React.useState("");
   const level = confidenceLevel(detail.confidence, detail.inferred);
   const levelColor = CONFIDENCE_COLORS[level];
   const pct = Math.round(detail.confidence * 100);

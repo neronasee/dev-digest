@@ -109,5 +109,10 @@ describe('assemblePrompt — ## PR intent', () => {
     const neither = userOf({ system: 'sys', diff: 'DIFF' });
     expect(neither).not.toContain('## PR description');
     expect(neither).not.toContain('## PR intent');
+    // Intent WITHOUT a description renders standalone, still before Skills / rules.
+    const solo = userOf({ system: 'sys', diff: 'DIFF', intent: 'Harden the rate limiter (bugfix).', skills: ['RULE-1'] });
+    expect(solo).not.toContain('## PR description');
+    expect(solo).toContain('## PR intent');
+    expect(solo.indexOf('## PR intent')).toBeLessThan(solo.indexOf('## Skills / rules'));
   });
 });

@@ -40,7 +40,7 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-10-01 — `Output was not valid JSON: Unterminated string` during intent classification can come from an output cap exhausted mid-string; inspect `finish_reason` before treating it as a Zod schema mismatch, and retry `length` responses from the original prompt with a larger token budget instead of repeating the same cap. (src/llm/openrouter.ts:150, ../server/src/modules/reviews/intent.ts:49)
 
 ## Session Notes
 

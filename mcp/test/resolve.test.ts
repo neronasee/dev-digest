@@ -8,11 +8,13 @@ import { ResolveError, resolveAgentId, resolvePullId, resolveRepoId } from '../s
 import type { ApiClient } from '../src/api-client.js';
 import type {
   AgentSummary,
+  BlastRadius,
   ConventionCandidate,
   PrMeta,
   Repo,
   ReviewRecord,
   ReviewRunResponse,
+  RunSummary,
 } from '@devdigest/shared';
 
 function mkAgent(name: string): AgentSummary {
@@ -72,7 +74,10 @@ function mkClient(o: { agents?: AgentSummary[]; repos?: Repo[]; pulls?: PrMeta[]
     listPulls: () => Promise.resolve(o.pulls ?? []),
     runReview: () => Promise.resolve({ pr_id: 'pr', runs: [], reviews: [] } satisfies ReviewRunResponse),
     listReviews: () => Promise.resolve([] as ReviewRecord[]),
+    listRuns: () => Promise.resolve([] as RunSummary[]),
     listConventions: () => Promise.resolve([] as ConventionCandidate[]),
+    getBlastRadius: () =>
+      Promise.resolve({ changed_symbols: [], downstream: [], summary: '' } satisfies BlastRadius),
   };
 }
 

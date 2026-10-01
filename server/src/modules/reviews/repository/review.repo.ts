@@ -166,6 +166,23 @@ export async function getReview(db: Db, reviewId: string): Promise<ReviewRow | u
   return row;
 }
 
+/**
+ * Findings of the single NEWEST review for a PR — the scoped read behind
+ * Smart Diff's "last review" line marking (specs/05). Two queries bounded to
+ * one review, unlike `reviewsForPull`, which materializes every review, all
+ * their findings, and their runs. `[]` when the PR has no review yet.
+ */
+export async function newestReviewFindings(db: Db, prId: string): Promise<FindingRow[]> {
+  const [newest] = await db
+    .select({ id: t.reviews.id })
+    .from(t.reviews)
+    .where(eq(t.reviews.prId, prId))
+    .orderBy(desc(t.reviews.createdAt))
+    .limit(1);
+  if (!newest) return [];
+  return db.select().from(t.findings).where(eq(t.findings.reviewId, newest.id));
+}
+
 /** Delete a whole review (one agent's run) + its findings (cascade), scoped
  *  to the workspace. Returns false if not found in the workspace. */
 export async function deleteReview(

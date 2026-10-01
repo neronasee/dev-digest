@@ -6,11 +6,12 @@
 import { z } from 'zod-v4';
 import type { McpServer } from '@modelcontextprotocol/server';
 import type { ApiClient } from '../api-client.js';
-import type { Severity } from '@devdigest/shared';
+import type { ReviewRecord, Severity } from '@devdigest/shared';
 import { resolvePullId, resolveRepoId } from '../resolve.js';
+import { fail } from './fail.js';
 
 const inputSchema = z.object({
-  repo: z.string().describe('Repository full_name or bare name'),
+  repo: z.string().min(1).describe('Repository full_name or bare name'),
   pr_number: z.number().int().positive().describe('PR number, e.g. 482'),
   run_id: z.string().optional().describe('Only findings from this run (from run-agent-on-pr output)'),
   severity: z
@@ -28,10 +29,50 @@ function oneLine(text: string): string {
   return (text.split('\n')[0] ?? '').slice(0, 200);
 }
 
-function fail(e: unknown): { isError: true; content: [{ type: 'text'; text: string }] } {
-  const message = e instanceof Error ? e.message : String(e);
-  return { isError: true, content: [{ type: 'text', text: message }] };
+export interface FindingsSummaryOptions {
+  severity?: Severity;
+  limit: number;
+  verbose: boolean;
 }
+
+/** Compact findings projection shared by get-findings and run-agent-on-pr:
+ *  severity→confidence ordering, severity counts, the limit slice, and the
+ *  200-char rationale trim (full text only when verbose). */
+export function summarizeFindings(reviews: ReviewRecord[], opts: FindingsSummaryOptions) {
+  const rows = reviews
+    .flatMap((review) => review.findings.map((finding) => ({ review, finding })))
+    .filter((row) => (opts.severity ? row.finding.severity === opts.severity : true))
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[a.finding.severity] - SEVERITY_RANK[b.finding.severity] ||
+        b.finding.confidence - a.finding.confidence,
+    );
+
+  const counts: Record<Severity, number> = { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 };
+  for (const { finding } of rows) counts[finding.severity] += 1;
+
+  const included = rows.slice(0, opts.limit);
+  const findings = included.map(({ finding }) => ({
+    title: finding.title,
+    file: finding.file,
+    line: finding.start_line,
+    severity: finding.severity,
+    category: finding.category,
+    confidence: finding.confidence,
+    rationale: opts.verbose ? finding.rationale : oneLine(finding.rationale),
+    ...(opts.verbose ? { suggestion: finding.suggestion } : {}),
+  }));
+
+  const truncated =
+    rows.length > included.length ||
+    (!opts.verbose &&
+      included.some(
+        ({ finding }) => oneLine(finding.rationale) !== finding.rationale || finding.suggestion != null,
+      ));
+
+  return { summary: { total: rows.length, ...counts }, findings, truncated };
+}
+
 
 export function registerGetFindingsTool(server: McpServer, client: ApiClient): void {
   server.registerTool(
@@ -49,41 +90,12 @@ export function registerGetFindingsTool(server: McpServer, client: ApiClient): v
         const allReviews = await client.listReviews(prId);
         const reviews = run_id ? allReviews.filter((r) => r.run_id === run_id) : allReviews;
 
-        const rows = reviews
-          .flatMap((review) => review.findings.map((finding) => ({ review, finding })))
-          .filter((row) => (severity ? row.finding.severity === severity : true))
-          .sort(
-            (a, b) =>
-              SEVERITY_RANK[a.finding.severity] - SEVERITY_RANK[b.finding.severity] ||
-              b.finding.confidence - a.finding.confidence,
-          );
-
-        const counts: Record<Severity, number> = { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 };
-        for (const { finding } of rows) counts[finding.severity] += 1;
-
-        const included = rows.slice(0, limit);
-        const findings = included.map(({ finding }) => ({
-          title: finding.title,
-          file: finding.file,
-          line: finding.start_line,
-          severity: finding.severity,
-          category: finding.category,
-          confidence: finding.confidence,
-          rationale: verbose ? finding.rationale : oneLine(finding.rationale),
-          ...(verbose ? { suggestion: finding.suggestion } : {}),
-        }));
-
-        const truncated =
-          rows.length > included.length ||
-          (!verbose &&
-            included.some(
-              ({ finding }) => oneLine(finding.rationale) !== finding.rationale || finding.suggestion != null,
-            ));
+        const { summary, findings, truncated } = summarizeFindings(reviews, { severity, limit, verbose });
 
         const structuredContent = {
           repo,
           pr_number,
-          summary: { total: rows.length, ...counts },
+          summary,
           reviews: reviews.map((r) => ({
             id: r.id,
             run_id: r.run_id,

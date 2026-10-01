@@ -54,7 +54,20 @@ stall — plan it.
    framework), which ports, adapters, and container getters are involved, whether
    `src/vendor/shared/` contracts change, and the exact files, signatures, and schemas to
    create or edit.
-7. **Write the plan.** Compose it in the fixed format below, check it against the No
+7. **Self-consistency pass (mandatory, before writing).** Cross-audit the task list
+   against itself and the code you read:
+   - **Field audit** — every field a task's contract/interface Produces must appear in
+     the task that persists or serves it (DB columns, repository mapping, route response
+     schema) and vice versa. A contract field with no column, or a column no contract
+     reads, is a plan defect.
+   - **File-disposition audit** — every named file verified to exist (or be explicitly
+     new); "create" only for paths that do not exist today, "edit"/"append" for those
+     that do (check the working tree, not memory). Drizzle migrations always emit the
+     `.sql` plus `meta/<NNNN>_snapshot.json` and a `_journal.json` append — list all
+     three in Files.
+   - **Interlock audit** — every cross-task Interfaces claim (Consumes/Produces) names
+     the same types on both sides.
+8. **Write the plan.** Compose it in the fixed format below, check it against the No
    Placeholders rule, keep it within ~300 lines, and Write it to
    `docs/plans/YYYY-MM-DD-<slug>.md` (today's date, kebab-case slug from the title). Then
    return only the summary block below.

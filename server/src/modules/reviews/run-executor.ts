@@ -2,6 +2,7 @@ import type { Container } from '../../platform/container.js';
 import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
+import type { PinoLike } from '../../platform/run-logger.js';
 import type { AgentRow, RepoRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
@@ -24,6 +25,15 @@ export type Logger = {
   error: (obj: unknown, msg?: string) => void;
   debug: (obj: unknown, msg?: string) => void;
 };
+
+/** Flatten a pino-style (obj, msg) call into one run-log line: "msg — err". */
+function pinoLine(obj: unknown, msg?: string): string {
+  const err =
+    typeof obj === 'object' && obj !== null && 'err' in obj
+      ? ` — ${String((obj as { err: unknown }).err)}`
+      : '';
+  return `${msg ?? 'degraded'}${err}`;
+}
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
 // Review per file; we merge findings + take the worst verdict / mean score).
@@ -161,7 +171,17 @@ export class ReviewRunExecutor {
     const t0 = Date.now();
     runLog.tool('intent…');
     try {
-      const record = await deriveIntent(this.container, workspaceId, pull, repo, diff);
+      // deriveIntent is fail-open and reports its degradation CAUSE through
+      // PinoLike.warn — bridge that into the run log so the Live Log + trace
+      // show WHY (previously the reason was dropped here and the line stayed
+      // generic). Pino-style (obj, msg) calls flatten to "msg — err".
+      const intentCause: PinoLike = {
+        info: () => {},
+        debug: () => {},
+        warn: (obj, msg) => runLog.error(`intent: ${pinoLine(obj, msg)}`),
+        error: (obj, msg) => runLog.error(`intent: ${pinoLine(obj, msg)}`),
+      };
+      const record = await deriveIntent(this.container, workspaceId, pull, repo, diff, intentCause);
       if (!record) {
         runLog.error('intent failed — reviewing without intent (degraded)');
         return undefined;
@@ -173,8 +193,8 @@ export class ReviewRunExecutor {
         })`,
       );
       return composeIntentBlock(record);
-    } catch {
-      runLog.error('intent failed — reviewing without intent (degraded)');
+    } catch (err) {
+      runLog.error(`intent failed — reviewing without intent (degraded): ${(err as Error).message}`);
       return undefined;
     }
   }

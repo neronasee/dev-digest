@@ -57,7 +57,14 @@ verdict INCOMPLETE, reported as such.
    server/src/vendor/shared client/src/vendor/shared`), migrations append-only
    (`git diff --name-status origin/main -- server/src/db/migrations/`), naming
    per AGENTS.md, spec-update-if-exists for every spec the plan names, no
-   hand-edited lockfiles.
+   hand-edited lockfiles. **Constraint-contract parity** — for every DB
+   constraint the changeset introduces or writes through (primary key, unique,
+   FK, check), trace one violating input through the write path: it must be
+   rejected with the plan's documented error class (e.g. a 422 domain error)
+   *before* the database enforces it. A constraint the DB enforces first —
+   surfacing as a raw driver error / 500 — where the plan or task prose
+   promises a domain rejection, is a MISUNDERSTOOD finding against the task
+   that owns that write path.
 5. **Run the matrix yourself** — every plan Verify / Verification command,
    hermetic lanes only: `pnpm typecheck` (server and client),
    `pnpm exec vitest run --exclude '**/*.it.test.ts'` (server), `pnpm test`

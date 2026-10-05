@@ -46,7 +46,8 @@
     },
     "config": {
       "title": "Config",
-      "savedToast": "Saved (v{version})"
+      "savedToast": "Saved (v{version})",
+      "projectContext": "Project context to use"
     },
     "versioning": {
       "title": "Versioning",

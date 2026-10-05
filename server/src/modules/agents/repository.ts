@@ -1,7 +1,8 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, countDistinct, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
+import { AppError } from '../../platform/errors.js';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
 import { isConfigChange } from './helpers.js';
 
@@ -192,6 +193,11 @@ export class AgentsRepository {
     const skills = await this.linkedSkillsWith(client, row.id).then((links) =>
       links.map((l) => l.skill.id),
     );
+    // Per-repo project-context document sets are part of the agent's config
+    // (AC-6/AC-7): a snapshot must capture them so an eval replay of a past
+    // version reproduces the same prompt block. Read in-tx so the snapshot
+    // commits atomically with the change that bumped the version.
+    const contextDocs = await this.contextSetsWith(client, row.id);
     await client
       .insert(t.agentVersions)
       .values({
@@ -206,6 +212,7 @@ export class AgentsRepository {
           ci_fail_on: row.ciFailOn,
           repo_intel: row.repoIntel,
           skills,
+          context_docs: contextDocs.map((s) => ({ repo_id: s.repoId, paths: s.paths })),
         },
       })
       .onConflictDoNothing();
@@ -338,5 +345,119 @@ export class AgentsRepository {
       .returning();
     await this.snapshotVersion(tx, row!, nextVersion);
     return row!;
+  }
+
+  // ---- agent_context_docs (project-context attachments) --------------------
+
+  /**
+   * Replace the agent's ordered document set for one repo (AC-4/AC-5/AC-6).
+   * ONE transaction: workspace ownership of agent AND repo, path validation,
+   * then delete+insert — a bad path or repo can never leave a half-replaced
+   * set, and the version bump + snapshot commit with the rows.
+   *
+   * `validPaths` is the SERVER-COMPUTED set of discovered documents for the
+   * repo (the project-context service passes it in); any path outside it is
+   * rejected 422 BEFORE a single row is written — a forged path never
+   * persists. A no-op save (identical ordered list) returns the agent row
+   * WITHOUT bumping the version (AC-6 says "changes" bump).
+   */
+  async setContextDocs(
+    workspaceId: string,
+    agentId: string,
+    repoId: string,
+    paths: string[],
+    validPaths: ReadonlySet<string>,
+  ): Promise<AgentRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const existing = await this.getByIdIn(tx, workspaceId, agentId);
+      if (!existing) return undefined;
+      // Parent-row read anchoring the attachment rows (repo-intel/reviews
+      // precedent) — a repo from another workspace fails the whole call.
+      const [repo] = await tx
+        .select({ id: t.repos.id })
+        .from(t.repos)
+        .where(and(eq(t.repos.workspaceId, workspaceId), eq(t.repos.id, repoId)));
+      if (!repo) return undefined;
+
+      // Server-side validation happens BEFORE any write (AC-5).
+      const invalid = paths.filter((p) => !validPaths.has(p));
+      if (invalid.length > 0) {
+        throw new AppError(
+          'invalid_context_path',
+          `Document path(s) not discoverable in this repository: ${invalid.join(', ')}`,
+          422,
+          { invalid_paths: invalid },
+        );
+      }
+
+      const current = await this.contextDocsIn(tx, agentId, repoId);
+      const unchanged =
+        current.length === paths.length && current.every((p, i) => p === paths[i]);
+      if (unchanged) return existing; // no-op save: no bump
+
+      await tx
+        .delete(t.agentContextDocs)
+        .where(and(eq(t.agentContextDocs.agentId, agentId), eq(t.agentContextDocs.repoId, repoId)));
+      if (paths.length > 0) {
+        await tx.insert(t.agentContextDocs).values(
+          paths.map((path, i) => ({ agentId, repoId, path, order: i })),
+        );
+      }
+      return this.bumpVersionIn(tx, existing);
+    });
+  }
+
+  /** The agent's ordered document paths for one repo. */
+  async contextDocsFor(agentId: string, repoId: string): Promise<string[]> {
+    return this.contextDocsIn(this.db, agentId, repoId);
+  }
+
+  private async contextDocsIn(client: DbOrTx, agentId: string, repoId: string): Promise<string[]> {
+    const rows = await client
+      .select({ path: t.agentContextDocs.path })
+      .from(t.agentContextDocs)
+      .where(and(eq(t.agentContextDocs.agentId, agentId), eq(t.agentContextDocs.repoId, repoId)))
+      .orderBy(asc(t.agentContextDocs.order));
+    return rows.map((r) => r.path);
+  }
+
+  /**
+   * The agent's per-repo document sets across ALL repos (per-repo isolation,
+   * AC-7) — the shape `snapshotVersion` captures as `context_docs`.
+   */
+  async contextSetsFor(agentId: string): Promise<{ repoId: string; paths: string[] }[]> {
+    return this.contextSetsWith(this.db, agentId);
+  }
+
+  private async contextSetsWith(
+    client: DbOrTx,
+    agentId: string,
+  ): Promise<{ repoId: string; paths: string[] }[]> {
+    const rows = await client
+      .select({ repoId: t.agentContextDocs.repoId, path: t.agentContextDocs.path })
+      .from(t.agentContextDocs)
+      .where(eq(t.agentContextDocs.agentId, agentId))
+      .orderBy(asc(t.agentContextDocs.repoId), asc(t.agentContextDocs.order));
+    const byRepo = new Map<string, string[]>();
+    for (const r of rows) {
+      const list = byRepo.get(r.repoId) ?? [];
+      list.push(r.path);
+      byRepo.set(r.repoId, list);
+    }
+    return [...byRepo.entries()].map(([repoId, paths]) => ({ repoId, paths }));
+  }
+
+  /**
+   * Per-document adoption for a repo: how many DISTINCT agents have each path
+   * attached (the Project Context page's "Used by N agents" chip).
+   */
+  async contextDocUsage(repoId: string): Promise<{ path: string; agentCount: number }[]> {
+    const rows = await this.db
+      .select({ path: t.agentContextDocs.path, agentCount: countDistinct(t.agentContextDocs.agentId) })
+      .from(t.agentContextDocs)
+      .where(eq(t.agentContextDocs.repoId, repoId))
+      .groupBy(t.agentContextDocs.path)
+      .orderBy(asc(t.agentContextDocs.path));
+    return rows.map((r) => ({ path: r.path, agentCount: Number(r.agentCount ?? 0) }));
   }
 }

@@ -322,11 +322,24 @@ export const AgentSkillLink = z.object({
 });
 export type AgentSkillLink = z.infer<typeof AgentSkillLink>;
 
+/**
+ * One repo's attached project-context document set — an ordered list of
+ * repo-relative paths scoped to a (agent, repo) pair, captured in agent
+ * version snapshots so replaying a past version reproduces its
+ * project-context block (AC-6). Paths only; document text is never stored.
+ */
+export const AgentVersionConfigDocs = z.object({
+  repo_id: z.string(),
+  paths: z.array(z.string()),
+});
+export type AgentVersionConfigDocs = z.infer<typeof AgentVersionConfigDocs>;
+
 // The immutable config snapshot captured in `agent_versions` whenever an agent's
 // config changes (everything but `enabled`). Mirrors the shape written by the
 // agents repository — provider/model/prompt/output_schema/strategy/gate/repo_intel
-// plus the ordered skill ids linked at snapshot time. Used for reproducibility
-// (eval replays a past version) and for surfacing an agent's edit history.
+// plus the ordered skill ids and per-repo project-context document sets linked
+// at snapshot time. Used for reproducibility (eval replays a past version) and
+// for surfacing an agent's edit history.
 export const AgentVersionConfig = z.object({
   provider: Provider,
   model: z.string(),
@@ -336,6 +349,9 @@ export const AgentVersionConfig = z.object({
   ci_fail_on: CiFailOn,
   repo_intel: z.boolean(),
   skills: z.array(z.string()),
+  /** Per-repo attached project-context paths at snapshot time. Defaults to []
+      so legacy snapshots (written before the field existed) parse unchanged. */
+  context_docs: z.array(AgentVersionConfigDocs).default([]),
 });
 export type AgentVersionConfig = z.infer<typeof AgentVersionConfig>;
 

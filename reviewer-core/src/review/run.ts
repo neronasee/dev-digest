@@ -7,7 +7,7 @@ import type {
   UnifiedDiff,
 } from '@devdigest/shared';
 import { Review as ReviewSchema, UnifiedDiff as UnifiedDiffSchema } from '@devdigest/shared';
-import { assemblePrompt } from '../prompt.js';
+import { assemblePrompt, type SpecEntry } from '../prompt.js';
 import { groundFindings, groundingSummary } from '../grounding.js';
 import { reduceReviews, scoreFromFindings, sliceDiff } from './reduce.js';
 import { outcomeFromFindings } from './outcome.js';
@@ -24,8 +24,10 @@ import type { CiFailOn } from '@devdigest/shared';
  * (no DB, GitHub, fs, memory retrieval, intent, or persistence) — those stay in
  * the caller (server persists + streams SSE; runner posts + writes an artifact).
  *
- * Skill bodies / memory / specs are RESOLVED strings here: the caller turns
- * AgentManifest skill slugs into bodies (DB in the studio, fs in the runner).
+ * Skill bodies / memory are RESOLVED strings here; specs are resolved strings
+ * or path-labeled entries: the caller turns AgentManifest skill slugs into
+ * bodies (DB in the studio, fs in the runner) and reads project-context
+ * documents from the repo clone at run time.
  */
 
 /** Default map-reduce threshold (matches the server's FILE_MAP_THRESHOLD_LINES). */
@@ -60,8 +62,13 @@ export interface ReviewInput {
   skills?: string[];
   /** Curated memory items. */
   memory?: string[];
-  /** Project-context spec chunks (untrusted; delimiter-wrapped downstream). */
-  specs?: string[];
+  /**
+   * Project-context documents (untrusted; delimiter-wrapped downstream).
+   * Plain strings keep the legacy positional wrapper labels; labeled entries
+   * ({@link SpecEntry}) wrap with their repo-relative path. Empty/undefined →
+   * section omitted.
+   */
+  specs?: (string | SpecEntry)[];
   /**
    * Optional callers-of-changed-symbols digest (T1.3). Untrusted; rendered
    * before the diff section. Empty/undefined → section omitted.

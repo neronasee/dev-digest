@@ -10,6 +10,7 @@ import type { Skill } from "@devdigest/shared";
 import { useUpdateSkill } from "@/lib/hooks/skills";
 import { useToast } from "@/lib/toast";
 import { SKILL_TYPES } from "@/app/skills/_components/SkillsListView/constants";
+import { ProjectContextSection } from "../ProjectContextSection";
 import { s } from "../../styles";
 
 export function ConfigTab({ skill }: { skill: Skill }) {
@@ -57,6 +58,7 @@ export function ConfigTab({ skill }: { skill: Skill }) {
           {t("preview.save")}
         </Button>
       </div>
+      <ProjectContextSection skillId={skill.id} />
     </div>
   );
 }

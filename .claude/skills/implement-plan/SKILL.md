@@ -126,7 +126,12 @@ Checkpoint (unless `--auto`): show files changed, ask to continue.
 ## Phase 2 — plan-verifier (the gate)
 
 Dispatch `plan-verifier` with the plan path and "working tree" (or the branch, if
-the user named one) as the implementation reference.
+the user named one) as the implementation reference. On fix-round re-verifies,
+packages the fix round provably did not touch (`git diff --quiet <pre-fix-ref>
+-- <pkg paths>`) may be carried as the verifier's own earlier same-session
+green result — same evidence-reuse conditions as
+[`pr-self-review`](../pr-self-review/SKILL.md) states them; the verifier's
+fresh-run charter is untouched for everything else.
 
 - `PASS` → proceed to Phase 3.
 - `INCOMPLETE` or `FAIL` → fix loop, capped at `max-fix` rounds: re-dispatch

@@ -45,6 +45,9 @@ export const PromptAssembly = z.object({
   skills_loaded: z.array(z.string()).nullish(),
   memory: z.string().nullish(),
   specs: z.string().nullish(),
+  /** Token estimate for the project-context block ALONE (~len/4); null when
+      absent. Mirrors skills_tokens (same joined-block basis). */
+  specs_tokens: z.number().int().nullish(),
   /** Callers-of-changed-symbols digest (T1.3); null when absent. */
   callers: z.string().nullish(),
   /** Repo skeleton / map (T3); null when absent. Enables per-slot token
@@ -63,6 +66,18 @@ export const MemoryPulled = z.object({
   text: z.string(),
 });
 export type MemoryPulled = z.infer<typeof MemoryPulled>;
+
+/**
+ * One project-context document actually read during a run: its repo-relative
+ * path plus its mechanical token estimate (~len/4). Legacy traces recorded
+ * plain path strings in `specs_read` — the union keeps them validating and
+ * rendering (AC-20).
+ */
+export const SpecRead = z.object({
+  path: z.string(),
+  tokens: z.number().int(),
+});
+export type SpecRead = z.infer<typeof SpecRead>;
 
 export const RunStats = z.object({
   duration_ms: z.number().int(),
@@ -93,7 +108,9 @@ export const RunTrace = z.object({
   tool_calls: z.array(ToolCall),
   raw_output: z.string(),
   memory_pulled: z.array(MemoryPulled),
-  specs_read: z.array(z.string()),
+  /** Project-context documents read during the run (AC-18): path + token
+      estimate objects; legacy plain-path strings keep validating (AC-20). */
+  specs_read: z.array(z.union([z.string(), SpecRead])),
   log: z.array(RunLogLine),
 });
 export type RunTrace = z.infer<typeof RunTrace>;

@@ -33,6 +33,15 @@ A spec lives in `specs/NN-name.flow.json`:
   below-the-fold toggle whose collapse keeps the asserted text out of the DOM).
 - Optional `"assert": { "stdoutIncludes": "…" }` adds a substring check on the
   command's stdout.
+- **`wait --text` casing is element-sensitive** (0.27): matching is
+  case-sensitive, and a CSS-`text-transform`ed target matches either its
+  transformed accessible text (headers/pills — INSIGHTS 2026-09-17, flows 04/08)
+  or its raw DOM casing (the Badge primitive — INSIGHTS 2026-09-20, and the
+  "Used by N agents" chip in flow 15, 2026-10-03). Never assume one form
+  universally: when the target is CSS-transformed, prefer `--fn` over
+  `document.body.innerText` (which reflects rendering), or assert a
+  non-transformed neighbor string. A `--text` probe for a transformed element
+  that always fails (or always passes vacuously) is a flow bug, not flake.
 - Locators are deterministic only (`--url`, `--text`, `--fn`,
   `find role|text|label`). We never use the AI `chat` command, so runs are
   stable and key-free.
@@ -61,8 +70,9 @@ Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
 ```sh
 # 1. install the agent-browser CLI once (downloads Chrome for Testing).
 #    Pinned to 0.27.x: locator behavior is version-sensitive (0.27's
-#    `wait --text` matches CSS-uppercased text — see INSIGHTS.md), so a
-#    0.28 behavior change could flake every locator.
+#    `wait --text` casing is element-sensitive — see the flow-format note
+#    above and INSIGHTS.md), so a 0.28 behavior change could flake every
+#    locator.
 npm i -g agent-browser@0.27 && agent-browser install
 ```
 
@@ -120,3 +130,6 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `12-agent-skills-tab` | `/agents` → API Contract Reviewer → Skills tab → order caption, filter field, four bound skills (read-only) |
 | `13-run-trace-skills` | PR #483 → Agent runs → Trace drawer → Prompt assembly shows the Skills block AND its `~N tokens` label, asserted together via `wait --fn` (seeded demo run) |
 | `14-conventions` | Conventions page over SEEDED candidates (scan buttons never clicked — no model call): card fields, modal open/cancel, reject persists across reload, Create → `repo-conventions` skill visible on /skills. Mutates data — hermetic fresh DB only |
+| `15-project-context-page` | Project Context page over the SEEDED fixture clone (re-scan never clicked — no model call): tree groups `api-layering.md` under `specs/`, reader renders the api→db invariant sentence, `USED BY 0 AGENTS` chip, footer `3 files · ≈357 tokens · refreshed …` |
+| `16-agent-context-tab` | `/agents` → API Contract Reviewer → Context tab: documents listed, `0 of 3 attached`, tick two docs in order (guarded `--fn` clicks — saves are immediate whole-set PUTs), badge updates, reload restores both checkmarks AND the order. Mutates data — hermetic fresh DB only |
+| `17-run-trace-project-context` | PR #483 → Agent runs → Trace drawer → `Specs read` chip `specs/api-layering.md · ≈144 tk` AND the `Project context (dynamic)` block's own `~158 tokens` label, asserted together via `wait --fn` (flow-13 pattern; seeded demo run) |

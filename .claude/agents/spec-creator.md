@@ -222,6 +222,14 @@ Before treating the draft as finished, check it against this list and fix what f
   into the spec — that belongs to `implementation-planner`.
 - Every open question from Step 0 you didn't resolve appears in
   `[NEEDS CLARIFICATION: …]`, not silently dropped or folded in as settled.
+- **"Unchanged-seam" check** — before the spec describes an existing seam
+  (contract, prompt slot, pipeline stage) as "unchanged" or "existing", grep
+  every declaration site of the type/field involved and reconcile each with the
+  ACs that consume it. A seam often has more than one declaration (e.g. a type
+  accepted by both an assembler's input and a downstream runner's input), and
+  "unchanged" is only true if every site already supports the behavior the ACs
+  demand — otherwise the spec needs an explicit reconciliation item, not an
+  "unchanged" claim a later phase must repair.
 
 ## Guardrails
 

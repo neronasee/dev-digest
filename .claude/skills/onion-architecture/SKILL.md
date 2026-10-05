@@ -63,8 +63,12 @@ Innermost → outermost:
 ## Enforcement
 
 `pnpm depcruise` in `server/` (config: `server/.dependency-cruiser.cjs`) fails
-the build on `error`-severity violations. Today: **0 errors, 4 warnings**
-(155 modules, 487 dependencies). Warnings are a tracked burn-down baseline —
+the build on `error`-severity violations. Today: **0 errors, 5 warnings**
+(193 modules, 634 dependencies) — the five `no-circular` warns are all
+composition-root facade cycles (the four repo-intel edges plus
+`project-context/service ↔ container` from the plan-mandated lazy
+`container.projectContext` getter; retirement rides the pending
+container-cycle policy). Warnings are a tracked burn-down baseline —
 see [`enforcement.md`](enforcement.md) — never permission to add violations.
 Never grow the warning count; shrink it, then promote the rule to `error`.
 Run `pnpm depcruise:all` to also gate reviewer-core purity

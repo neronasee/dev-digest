@@ -14,3 +14,4 @@ A spec is updated in the same PR that changes the behavior it describes.
 | [04](04-pr-intent.md) | PR Intent — motivation classification before review |
 | [05](05-smart-diff.md) | Smart Diff — role-grouped Files-changed with inline findings |
 | [06](06-blast-radius.md) | Blast Radius — downstream callers/endpoints/crons + prior-PR overlap |
+| [07](07-project-context.md) | Project Context — repo-document attachment → untrusted `## Project context` block |

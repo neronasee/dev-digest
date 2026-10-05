@@ -33,6 +33,7 @@
       "provider": "Provider",
       "memoryPulled": "Memory pulled",
       "specsRead": "Specs read",
+      "specsChip": "{path} · ≈{tokens} tk",
       "items": "{count, plural, one {# item} other {# items}}",
       "none": "none",
       "skillsLoaded": "Skills loaded"

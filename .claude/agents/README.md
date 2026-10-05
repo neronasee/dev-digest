@@ -62,6 +62,16 @@ Both approval gates in the pipeline are the **user's**, not the orchestrator's:
 Later transitions (implementer → reviewers → pr-self-review) run without a
 mandatory pause.
 
+**Post-approval amendment rounds** — an owner change to a spec or to already-
+shipped code mid-pipeline — resume the still-resumable agent instance that owns
+the artifact via `SendMessage` instead of a fresh dispatch: the spec-creator for
+spec amendments, and the implementer instance that built the touched files for
+code amendments. A fresh dispatch re-buys the orientation that instance already
+paid for. Judge staleness before resuming: a few rounds back is fine; if many
+decision-rounds have passed since that instance last ran (its context describes
+a world that no longer exists), a fresh dispatch with a precise brief is
+cleaner (retro `docs/retro/ledger/2026-10-03-project-context-folder.md` R1).
+
 `brainstorm` sits upstream of `spec-creator` — it sharpens a fuzzy idea into a
 brief and never plans; a request already concrete enough skips straight to
 spec-creator (or to implementation-planner directly, for a small change that

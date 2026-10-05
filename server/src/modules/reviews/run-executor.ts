@@ -255,6 +255,9 @@ export class ReviewRunExecutor {
       // a crafted payload can't skip the wrapping. Empty set → the prompt is
       // identical to the pre-skills shape (omit-when-empty, like callers/repoMap).
       const linkedSkills = await this.agents.linkedSkills(agent.id);
+      // AC-11 — only ENABLED skills contribute their context documents (same
+      // rule as the skill bodies above).
+      const enabledSkillIds = linkedSkills.filter((l) => l.skill.enabled).map((l) => l.skill.id);
       // Pure composer from the skills module (no I/O, no cycle), reached via
       // the container seam instead of importing skills module internals.
       const { bodies: skillBodies, names: skillNames, tokens: skillTokens } =
@@ -263,6 +266,36 @@ export class ReviewRunExecutor {
         runLog.info(
           `Loaded ${skillNames.length} skill(s) (~${skillTokens} tokens): ${skillNames.join(', ')}`,
         );
+      }
+
+      // Project Context — the attached repo documents, composed SERVER-side at
+      // run time (fresh read, per-doc truncation, whole-block token cap). The
+      // content is UNTRUSTED and reviewer-core wraps every entry with its
+      // repo-relative path as the untrusted label. FAIL-OPEN like every
+      // enrichment: an error degrades to review-without-the-block, never a
+      // failed run.
+      let context: Awaited<ReturnType<Container['projectContext']['composeForRun']>> | undefined;
+      try {
+        context = await this.container.projectContext.composeForRun(
+          workspaceId,
+          pull.repoId,
+          agent.id,
+          enabledSkillIds,
+        );
+        for (const path of context.omitted) {
+          runLog.info(`project context: document no longer readable — omitted ${path}`);
+        }
+        for (const path of context.dropped) {
+          runLog.info(`project context: document dropped (block token cap) — ${path}`);
+        }
+        if (context.entries.length > 0) {
+          runLog.info(
+            `project context: ${context.entries.length} document(s) (~${context.totalTokens} tokens)`,
+          );
+        }
+      } catch (err) {
+        context = undefined;
+        runLog.info(`project context: failed — ${(err as Error).message}`);
       }
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
@@ -286,6 +319,14 @@ export class ReviewRunExecutor {
         // Skills Lab — linked skill bodies in binding order; assemblePrompt
         // renders the `## Skills / rules` section and records it in the trace.
         ...(skillBodies.length > 0 ? { skills: skillBodies } : {}),
+        // Project Context — attached repo documents as path-labeled entries;
+        // assemblePrompt renders the single `## Project context` block with
+        // each entry's repo-relative path as the untrusted wrapper label.
+        // Omitted when empty (AC-13): a no-attachment run's prompt is
+        // byte-identical to the pre-feature shape.
+        ...(context && context.entries.length > 0
+          ? { specs: context.entries.map((e) => ({ path: e.path, content: e.content })) }
+          : {}),
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
@@ -374,6 +415,12 @@ export class ReviewRunExecutor {
           ...(skillBodies.length > 0
             ? { skills_tokens: skillTokens, skills_loaded: skillNames }
             : {}),
+          // Same attribution basis for the project-context block: the estimate
+          // of the JOINED block exactly as assembled (~chars/4), stamped only
+          // when the block exists (null when absent, like skills_tokens).
+          ...(outcome.assembly.specs
+            ? { specs_tokens: Math.ceil(outcome.assembly.specs.length / 4) }
+            : {}),
         },
         tool_calls: outcome.chunks.map((c) => ({
           tool: 'review_file',
@@ -383,7 +430,9 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        // AC-18 — what the block actually read: path + mechanical token
+        // estimate per document (empty when the run composed no block).
+        specs_read: context ? context.read : [],
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),

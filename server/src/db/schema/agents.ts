@@ -1,6 +1,16 @@
-import { pgTable, uuid, text, integer, boolean, jsonb, primaryKey } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  boolean,
+  jsonb,
+  primaryKey,
+  index,
+} from 'drizzle-orm/pg-core';
 import { now } from './_shared';
 import { workspaces, users } from './core';
+import { repos } from './repos';
 import { skills } from './skills';
 
 // ============================================================ Agents & skills
@@ -60,4 +70,28 @@ export const agentSkills = pgTable(
     order: integer('order').notNull().default(0),
   },
   (t) => ({ pk: primaryKey({ columns: [t.agentId, t.skillId] }) }),
+);
+
+/**
+ * Project-context document attachment: one row per (agent, repo, path) in the
+ * agent's ordered selection for that repo. Owned by the agents module's
+ * repository (the anchor table's owner owns its link tables); document TEXT is
+ * never stored — paths only, re-read from the clone at run time.
+ */
+export const agentContextDocs = pgTable(
+  'agent_context_docs',
+  {
+    agentId: uuid('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    repoId: uuid('repo_id')
+      .notNull()
+      .references(() => repos.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    order: integer('order').notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.agentId, t.repoId, t.path] }),
+    repoIdx: index('agent_context_docs_repo_idx').on(t.repoId),
+  }),
 );

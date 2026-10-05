@@ -100,6 +100,47 @@ describe("RunTraceDrawer — skills block observability", () => {
   });
 });
 
+describe("RunTraceDrawer — project-context observability (AC-18/AC-20)", () => {
+  afterEach(() => {
+    box.current = TRACE;
+  });
+
+  it("renders specs_read chips with token estimates and legacy plain strings bare", () => {
+    box.current = {
+      ...TRACE,
+      specs_read: [{ path: "specs/api-layering.md", tokens: 96 }, "docs/legacy.md"],
+    };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={483} onClose={() => {}} />);
+    // "Specs read" lives in the (open-by-default) Configuration section.
+    expect(screen.getByText("Specs read")).toBeInTheDocument();
+    expect(screen.getByText("specs/api-layering.md · ≈96 tk")).toBeInTheDocument();
+    expect(screen.getByText("docs/legacy.md")).toBeInTheDocument();
+    expect(screen.queryByText("docs/legacy.md · ≈")).not.toBeInTheDocument();
+  });
+
+  it("attributes tokens to the Project context prompt block, mirroring the skills block", async () => {
+    const user = userEvent.setup();
+    box.current = {
+      ...TRACE,
+      prompt_assembly: {
+        ...TRACE.prompt_assembly,
+        specs: "## Project context\n<untrusted source=\"specs/api-layering.md\">…",
+        specs_tokens: 312,
+      },
+    };
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={483} onClose={() => {}} />);
+    await user.click(screen.getByText("Prompt assembly"));
+    expect(screen.getByText("Project context (dynamic)")).toBeInTheDocument();
+    expect(screen.getByText("~312 tokens")).toBeInTheDocument();
+  });
+
+  it("renders a legacy trace (empty specs_read, no specs_tokens) unchanged", () => {
+    renderWithIntl(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(screen.queryByText("Specs read")).not.toBeInTheDocument();
+    expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
+  });
+});
+
 describe("RunTraceDrawer — grounding and optional telemetry", () => {
   afterEach(() => {
     box.current = TRACE;

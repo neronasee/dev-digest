@@ -91,7 +91,12 @@ both rounds into one Questions block where possible: one round trip, not two.
 6. **Fix placement and interfaces.** Decide per task where code lives (onion decision
    framework), which ports, adapters, and container getters are involved, whether
    `src/vendor/shared/` contracts change, and the exact files, signatures, and schemas to
-   create or edit.
+   create or edit. **Cross-batch seams are pinned exactly**: whenever tasks that will run
+   in different implementer batches (or different phases) share an interface, the
+   Produces/Consumes lines name the full request shape — HTTP method, path, query
+   parameters, body, and response schema (or the exact function/contract signature for
+   non-HTTP seams). Parallel implementers must never bridge an interface by assumption;
+   an unpinned cross-batch seam is a plan defect.
 7. **Self-consistency pass (mandatory, before writing).** Cross-audit the task list
    against itself and the code you read:
    - **Field audit** — every field a task's contract/interface Produces must appear in
@@ -104,7 +109,8 @@ both rounds into one Questions block where possible: one round trip, not two.
      `.sql` plus `meta/<NNNN>_snapshot.json` and a `_journal.json` append — list all
      three in Files.
    - **Interlock audit** — every cross-task Interfaces claim (Consumes/Produces) names
-     the same types on both sides.
+     the same types on both sides, and every cross-batch HTTP seam is pinned to
+     method + path + query + body + response on both sides.
    - **Coverage audit** — every `AC-#` listed in Source requirements is covered by at
      least one task, and every task traces back to a requirement or an explicitly
      stated supporting change.

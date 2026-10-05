@@ -1,0 +1,70 @@
+{
+  "name": "Project Context page: seeded document tree, invariant preview, usage chip, footer counts",
+  "description": "Open the Project Context page from the WORKSPACE sidebar (text locator — role link does not resolve NavItem's nested icon+label anchor) and pin the read-only surface over the seeded fixture clone: the document tree groups api-layering.md under the specs/ root, selecting it renders the AC-15 invariant sentence (module api/ must not import db/ directly) through the markdown reader, the reader shows the 'Used by 0 agents' adoption chip (wait --text matches the raw DOM text — the Badge's uppercase is CSS-only), and the mechanical footer counts the discovered facts (3 files, ≈357 tokens, refreshed time). Read-only: the re-scan button is never clicked and no editor affordance exists. The invariant sentence and footer are asserted via wait --fn over innerText — inline <code> spans and possible line wraps make raw --text substrings brittle, and the seeded token figures (144+96+117=357) are the deterministic discovery math.",
+  "steps": [
+    {
+      "cmd": ["open", "{BASE}/"],
+      "label": "load the app root"
+    },
+    {
+      "cmd": ["wait", "--url", "/pulls"],
+      "label": "root redirects to the seeded repo's PR list"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "repo context resolves — sidebar hrefs carry the real repo id"
+    },
+    {
+      "cmd": ["find", "text", "Project Context", "click"],
+      "label": "open Project Context from the WORKSPACE sidebar section (text locator)"
+    },
+    {
+      "cmd": ["wait", "--url", "/context"],
+      "label": "project-context route reached"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "document discovery settles"
+    },
+    {
+      "cmd": ["wait", "--text", "Markdown documents discovered from this repository's local clone"],
+      "label": "page subtitle renders — documents are read-only, discovered from the clone"
+    },
+    {
+      "cmd": ["wait", "--text", "specs/"],
+      "label": "the document tree shows the specs root group"
+    },
+    {
+      "cmd": ["wait", "--text", "api-layering.md"],
+      "label": "api-layering.md is listed under specs"
+    },
+    {
+      "cmd": ["find", "text", "api-layering.md", "click"],
+      "label": "select the invariant document in the reader"
+    },
+    {
+      "cmd": ["wait", "--text", "specs/api-layering.md"],
+      "label": "the reader head shows the selected doc's full repo-relative path"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => /module\\s+api\\/\\s+must not import\\s+db\\//.test(document.body.innerText)"
+      ],
+      "label": "the preview renders the invariant sentence — module api/ must not import db/ directly (innerText: the sentence spans inline code elements)"
+    },
+    {
+      "cmd": ["wait", "--text", "Used by 0 agents"],
+      "label": "the usage chip shows zero adoptions in the fresh seed (Badge uppercases via CSS text-transform — wait --text matches the raw DOM form)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => /3\\s*files\\s*·\\s*≈\\s*357\\s*tokens\\s*·\\s*refreshed/.test(document.body.innerText)"
+      ],
+      "label": "the footer counts the discovery facts — 3 files, ≈357 tokens, refreshed time (regex tolerates wraps)"
+    }
+  ]
+}

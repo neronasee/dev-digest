@@ -93,6 +93,11 @@ export const SettingsKnown = z.object({
   automatic_reviews: z.boolean().default(false),
   /** Per-feature model overrides (provider+model), keyed by FeatureModelId. */
   feature_models: z.record(FeatureModelId, FeatureModelChoice).default({}),
+  /**
+   * Directory names the project-context Reader scans for markdown documents.
+   * Must stay in sync with the server module's DEFAULT_CONTEXT_ROOTS.
+   */
+  project_context_roots: z.array(z.string().min(1)).default(['specs', 'docs', 'insights']),
 });
 export type SettingsKnown = z.infer<typeof SettingsKnown>;
 
@@ -248,13 +253,59 @@ export const PrCommentInput = z.object({
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
 // ---- Project Context ----
-export const SpecFile = z.object({
+/**
+ * One discovered repository markdown document. Virtual — re-discovered from
+ * the repo's local clone on demand; nothing about a document is persisted.
+ */
+export const ProjectDoc = z.object({
+  /** Repo-relative path, e.g. `specs/api-layering.md`. */
   path: z.string(),
-  content: z.string().nullish(),
-  size: z.number().int().nullish(),
-  updated_at: z.string().nullish(),
+  /** Root folder the document was found under (its type: `specs`, `docs`, …). */
+  root: z.string(),
+  size_bytes: z.number().int(),
+  /** Mechanical estimate (~chars/4), same basis as skills attribution. */
+  tokens_estimate: z.number().int(),
 });
-export type SpecFile = z.infer<typeof SpecFile>;
+export type ProjectDoc = z.infer<typeof ProjectDoc>;
+
+/** GET /repos/:id/documents — the repo's discovered documents + discovery facts. */
+export const ProjectDocList = z.object({
+  repo_id: z.string(),
+  /** False when the repo has no local clone — then `notice` explains why. */
+  cloned: z.boolean(),
+  notice: z.string().nullish(),
+  documents: z.array(ProjectDoc),
+  /** Search roots the scan used (workspace `project_context_roots`). */
+  roots: z.array(z.string()),
+  refreshed_at: z.string(),
+  total_tokens_estimate: z.number().int(),
+});
+export type ProjectDocList = z.infer<typeof ProjectDocList>;
+
+/** GET /repos/:id/documents/content?path= — one document's raw markdown text. */
+export const ProjectDocContent = z.object({
+  path: z.string(),
+  content: z.string(),
+});
+export type ProjectDocContent = z.infer<typeof ProjectDocContent>;
+
+/** Per-document adoption for the repo: how many agents have it attached. */
+export const ProjectDocUsage = z.object({
+  path: z.string(),
+  agent_count: z.number().int(),
+});
+export type ProjectDocUsage = z.infer<typeof ProjectDocUsage>;
+
+/**
+ * The attached document set for one (agent|skill, repo) pair — an ordered
+ * list of repo-relative paths. Paths only, never document text.
+ */
+export const ContextAttachment = z.object({
+  owner_id: z.string(),
+  repo_id: z.string(),
+  paths: z.array(z.string()),
+});
+export type ContextAttachment = z.infer<typeof ContextAttachment>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

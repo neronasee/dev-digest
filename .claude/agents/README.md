@@ -11,14 +11,15 @@ README — are silently ignored by the agent loader.
 | Agent | Role | Model | Writes | Summary |
 |-------|------|-------|--------|---------|
 | [researcher](researcher.md) | Grounded research | sonnet | Nothing (read-only) | Repo investigation or external web research; structured evidence-backed report |
-| [planner](planner.md) | Planning | opus | `docs/plans/*.md` only | Turns a change request into a self-contained Development Plan for the implementer |
+| [spec-creator](spec-creator.md) | Spec writing | opus | One spec file per run, in `specs/` or `<module>/specs/` only | Feature idea → English feature-spec (EARS `AC-#`s, story→AC traceability, provenance); blocking questions relayed by the caller; `researcher` dispatches for facts the repo can't answer |
+| [implementation-planner](implementation-planner.md) | Planning | opus | `docs/plans/*.md` only | Turns existing requirements — a spec-creator spec or a clear request — into a Development Plan; requirement checks, own recommendations, mandatory single- vs multi-agent question |
 | [implementer](implementer.md) | Execution | sonnet | Code in all 4 packages | Executes an approved Development Plan; skills + per-package checks; evidence report |
 | [test-writer](test-writer.md) | Test coverage | sonnet | Test files + e2e flows only | Writes/runs tests across packages; defects reported, never fixed |
 | [architecture-reviewer](architecture-reviewer.md) | Architecture review | opus | Nothing (read-only) | Onion/boundary findings with evidence + depcruise gate; REJECT…ACCEPT verdict |
 | [security-reviewer](security-reviewer.md) | Security review | opus | Nothing (read-only) | OWASP 2025 + LLM Top 10 audit of a changeset; CWE-tagged findings, secret scan, deterministic verdict |
 | [plan-verifier](plan-verifier.md) | Plan compliance | sonnet | Nothing (read-only) | Per-item VERIFIED/PARTIAL/MISSING ledger of a plan vs the diff; runs the plan's checks |
 | [doc-writer](doc-writer.md) | Documentation | sonnet | Docs (*.md) only | Turns implemented work into README/docs/specs/TESTING content with verified commands and diagrams |
-| [brainstorm](brainstorm.md) | Ideation | opus | `docs/briefs/*.md` only | Fuzzy idea → grounded decision brief (capped question rounds, 2-4 options, recommendation) for the planner |
+| [brainstorm](brainstorm.md) | Ideation | opus | `docs/briefs/*.md` only | Fuzzy idea → grounded decision brief (capped question rounds, 2-4 options, recommendation) for the implementation-planner |
 | [insights-curator](insights-curator.md) | INSIGHTS.md curation | sonnet | The four `INSIGHTS.md` only | User-invoked periodic gardening — evidence-checked merge/prune/re-date + promotion proposals |
 
 ## The plan → implement pipeline
@@ -27,7 +28,11 @@ README — are silently ignored by the agent loader.
 fuzzy idea → brainstorm → docs/briefs/YYYY-MM-DD-<slug>.md → caller review
                                                               │ approved (brief becomes the request)
                                                               ▼
-request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (approval gate)
+feature idea → spec-creator → specs/YYYY-MM-DD-<slug>.md → caller review
+                                                              │ approved (spec becomes the requirements)
+   small/clear request (skips spec-creator) ───────────────────┤
+                                                              ▼
+requirements → implementation-planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (approval gate)
                                                               │ approved
                                                               ▼
           implementer (plan is read-only contract; writes code, invokes skills, runs checks)
@@ -44,15 +49,36 @@ request → planner → docs/plans/YYYY-MM-DD-<slug>.md → caller review (appro
           pr-self-review (main agent's pre-PR gate) → PR
 ```
 
-The approval gate in the pipeline is the **user's**, not the orchestrator's:
-after the planner returns, the main agent presents the plan and waits for the
-user's explicit approval before dispatching the implementer — it never
-auto-advances that boundary. Later transitions (implementer → reviewers →
-pr-self-review) run without a mandatory pause.
+Both approval gates in the pipeline are the **user's**, not the orchestrator's:
 
-`brainstorm` sits upstream of `planner` — it sharpens a fuzzy idea into a
-brief and never plans; a request already concrete enough goes straight to the
-planner. `test-writer` is a supporting write lane for dedicated test-coverage
+- **Spec gate** — after spec-creator returns, the main agent presents the spec and
+  waits for the user's explicit approval before dispatching the
+  implementation-planner. Resolving the spec's NEEDS CLARIFICATION items through
+  questions is not approval; the finished spec itself must be signed off.
+- **Plan gate** — after the implementation-planner returns, the main agent presents
+  the plan and waits for the user's explicit approval before dispatching the
+  implementer — it never auto-advances that boundary.
+
+Later transitions (implementer → reviewers → pr-self-review) run without a
+mandatory pause.
+
+`brainstorm` sits upstream of `spec-creator` — it sharpens a fuzzy idea into a
+brief and never plans; a request already concrete enough skips straight to
+spec-creator (or to implementation-planner directly, for a small change that
+doesn't deserve a spec). `spec-creator` writes the *what and why* — a committed
+spec at root [`specs/`](../../specs/README.md) for cross-module features, the
+module's `specs/` for single-module ones; `implementation-planner` consumes it
+and writes the *how*, citing the spec's `AC-#` ids under Source requirements.
+That spec → plan split is the spec driven development chain: every handoff is a
+file on disk the user reviews before the next agent runs. Once a plan is
+approved, the [`implement-plan`](../skills/implement-plan/SKILL.md) skill
+drives the execution half in one command — implementer, the `plan-verifier`
+gate, then `architecture-reviewer` with a capped fix loop; when running those
+by hand instead, run `plan-verifier` first (cheapest check — its verdict can
+send work back to `implementer` before anything reviews it). After a
+multi-agent run, the [`workflow-retro`](../skills/workflow-retro/SKILL.md)
+skill — manual-only — retrospects on how the agents coordinated into
+`docs/retro/ledger/`. `test-writer` is a supporting write lane for dedicated test-coverage
 work — dispatched on demand (typically alongside or after the implementer),
 never inside a plan run. `researcher` stays orthogonal — on demand at any
 point. `insights-curator` is the periodic, user-invoked gardener of the module
@@ -78,17 +104,47 @@ for the pre-PR gate.
 - **Output artifact** — chat report: `## Conclusions / Evidence / References / Not found`
   (or a clarifying-questions block). No files.
 
-### planner — [planner.md](planner.md)
+### spec-creator — [spec-creator.md](spec-creator.md)
 
-- **Responsibility** — turn a change request into a Development Plan grounded in root
-  `AGENTS.md`, module READMEs/docs/specs, per-module `INSIGHTS.md`, `TESTING.md` lanes, and
-  skill routing from `.claude/skills/pr-self-review/skill-map.md` Table A. Names exact files,
-  interfaces (Consumes/Produces), skills, constraints, and per-task Verify commands per task.
+- **Responsibility** — turn a feature idea (optionally with user-supplied design sources:
+  pasted text, screenshots, a Figma link, existing code) into an English feature-spec —
+  problem, goals/non-goals, user stories, EARS acceptance criteria (`AC-1`, `AC-2`…) with
+  story→AC traceability, edge cases, non-functional needs, input provenance, untrusted
+  inputs — *what and why*, never *how*. Works six clarification categories; blocking gaps
+  come back as a Questions block relayed by the caller, the rest stay inline as
+  `[NEEDS CLARIFICATION: …]`. Analyzes design sources for missing states, corner cases,
+  cross-module gaps, and UX improvements (recorded as suggestions). Loads project skills to
+  ground its own judgment per category; dispatches `researcher` (only `researcher`) for
+  lookups the repo can't answer; self-checks EARS phrasing and traceability before finishing.
+- **Model / permissions** — opus; `Read, Grep, Glob, Bash, WebFetch, Skill, Write, Agent,
+  mcp__devdigest__get_conventions` — Bash chartered read-only (`ls`, `git log/show/diff`,
+  `wc`, `rg`); Write chartered to one spec file per run, in `specs/` or `<module>/specs/`
+  only; Agent chartered to `researcher` only; the MCP conventions lookup is read-only and
+  best-effort (skipped + reported when the local API behind it isn't running).
+- **Input** — a feature idea, optionally with design sources.
+- **Output artifacts** — `specs/YYYY-MM-DD-<slug>.md` (cross-module) or
+  `<module>/specs/YYYY-MM-DD-<slug>.md` (single-module), both committed, plus a chat summary
+  (path, location choice and why, Goals/Non-goals paragraph, traceability confirmation,
+  researcher dispatches, open NEEDS CLARIFICATION items). The spec awaits the caller's
+  review — status stays `draft` until the user approves it.
+
+### implementation-planner — [implementation-planner.md](implementation-planner.md)
+
+- **Responsibility** — turn requirements that already exist — a
+  `specs/YYYY-MM-DD-<slug>.md` written by spec-creator, or a change request clear enough to
+  plan directly — into a Development Plan grounded in root `AGENTS.md`, module
+  READMEs/docs/specs, per-module `INSIGHTS.md`, `TESTING.md` lanes, and skill routing from
+  `.claude/skills/pr-self-review/skill-map.md` Table A. Checks the requirements first (reads
+  the spec in full, lists its `AC-#` ids, surfaces every `[NEEDS CLARIFICATION: …]`), records
+  its own recommendations as recommendations, and always asks single- vs multi-agent
+  execution before writing. Names exact files, interfaces (Consumes/Produces), skills,
+  constraints, and per-task Verify commands per task. Never writes a feature-spec.
 - **Model / permissions** — opus; `Read, Grep, Glob` plus `Write` chartered to a single plan
   file. No Bash; no Skill tool (reads `SKILL.md` files directly).
-- **Input** — a change request with a concrete outcome.
+- **Input** — a spec path, or a change request with a concrete outcome.
 - **Output artifacts** — `docs/plans/YYYY-MM-DD-<slug>.md` (gitignored handoff artifact) plus a
-  chat summary (path, assumptions, advised reviews). Execution waits for the caller's review.
+  chat summary (path, requirements coverage, execution mode, assumptions, advised reviews).
+  Execution waits for the caller's review.
 
 ### implementer — [implementer.md](implementer.md)
 
@@ -129,7 +185,7 @@ for the pre-PR gate.
 - **Model / permissions** — opus; read-only — `Read, Grep, Glob, Bash, TodoWrite`, no
   Write/Edit; Bash chartered to read-only git (`diff/log/show/blame/ls-files`), `ls`/`wc`/`rg`,
   and `pnpm depcruise` / `pnpm depcruise:all` from `server/`.
-- **Input** — a changeset scope, or the planner's "Advised reviews" note after implementation.
+- **Input** — a changeset scope, or the implementation-planner's "Advised reviews" note after implementation.
 - **Output artifact** — chat report: `## Verdict / Findings / Predictions / Checked /
   Mechanical gates / Not examined`. No files.
 
@@ -148,7 +204,7 @@ for the pre-PR gate.
 - **Model / permissions** — opus; read-only — `Read, Grep, Glob, Bash, TodoWrite`,
   no Write/Edit; Bash chartered to read-only git (`diff/log/show/blame/ls-files`),
   `ls`/`wc`/`rg`.
-- **Input** — a changeset scope, or the planner's "Advised reviews" security
+- **Input** — a changeset scope, or the implementation-planner's "Advised reviews" security
   flag after implementation.
 - **Output artifact** — chat report: `## Verdict / Findings / Predictions /
   Trust model / Checked / Mechanical scans / Not examined`. No files.
@@ -186,12 +242,12 @@ for the pre-PR gate.
   class when in doubt), research the repo before asking, run capped question
   rounds relayed by the caller (≤3 per round, ≤5 total, multiple-choice with
   defaults, never asking what the repo answers), explore 2-4 grounded options
-  with trade-offs, recommend one, and end exactly where the planner picks up.
+  with trade-offs, recommend one, and end exactly where the implementation-planner picks up.
   The brief states what and why — never task lists, files, or skill routings.
 - **Model / permissions** — opus; `maxTurns: 60`; tools `Read, Grep, Glob,
   Write, Bash, TodoWrite` — Write chartered to a single brief file; Bash
-  read-only (git log/show/blame/diff, ls, wc, rg). No permissionMode (planner
-  parity).
+  read-only (git log/show/blame/diff, ls, wc, rg). No permissionMode
+  (implementation-planner parity).
 - **Input** — a fuzzy idea or an open design question.
 - **Output artifacts** — `docs/briefs/YYYY-MM-DD-<slug>.md` (gitignored
   handoff artifact) plus a chat summary: `## Brief / Classification /
@@ -218,7 +274,22 @@ for the pre-PR gate.
   report: `## Result / Per-file ledger / Pruned / Open Questions / Promotion
   proposals / Size / Notes`. The caller reviews the diff.
 
-## Grounding (planner & implementer)
+## Grounding (spec-creator)
+
+Assembled like the sections above (2026-10-02), adapted from the same lineage as
+the reference SDD variant this fleet's spec driven development chain was designed
+against:
+
+| Rule in the agent | Grounded in |
+|---|---|
+| EARS five patterns (Ubiquitous / Event-driven / State-driven / Unwanted / Optional) for every `AC-#`; single testable statements | Mavin et al., *Easy Approach to Requirements Syntax* (2009) — each pattern collapses to one unambiguous, testable statement |
+| Six clarification categories; `[NEEDS CLARIFICATION: …]` instead of guessing | GitHub Spec Kit `/clarify` command taxonomy |
+| Blocking questions as a relayed Questions block; caller relays; resume retains history | official sub-agents docs (AskUserQuestion stripped from subagents) — same round protocol as brainstorm |
+| Spec = what/why vs plan = how; workflow diagrams and contract shapes allowed, stack/files/libraries not | spec-kit specify/plan separation; the existing plan-verifier spec-vs-plan boundary |
+| `researcher`-only dispatch, one concrete question each, parallel when independent | official sub-agents chaining pattern + researcher's own fact-finding charter |
+| Self-check pass (EARS phrasing, story→AC traceability, provenance tags) before finishing | requirements-traceability discipline plan-verifier already enforces at the other end of the chain |
+
+## Grounding (implementation-planner & implementer)
 
 Their rules were assembled from official documentation and source-level inspection of
 prior-art systems (2026-09-24), not invented:
@@ -257,7 +328,7 @@ frontmatter consumed by custom hooks (OMC `level:`/`handoff:`), per-task impleme
 
 ## Grounding (review & support agents)
 
-Assembled like the planner/implementer rules above (2026-09-24):
+Assembled like the implementation-planner/implementer rules above (2026-09-24):
 
 | Rule in the agents | Grounded in |
 |---|---|

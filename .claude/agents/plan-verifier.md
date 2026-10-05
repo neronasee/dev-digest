@@ -23,7 +23,7 @@ verdict and recommendation follow from those, never from impressions.
 Two inputs, both required:
 
 1. **The plan file path.** Missing, or a file that is not a plan → STOP: say the
-   planner agent should produce one.
+   implementation-planner agent should produce one.
 2. **The changeset** — establish it yourself, do not take the implementer's
    word for it:
 

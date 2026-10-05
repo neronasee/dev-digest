@@ -102,11 +102,16 @@ sync when contracts change.
   (flow format, hermetic runner).
 - Starting work in a module → read that module's `INSIGHTS.md` first — always
   before a task, especially when debugging something non-obvious.
-- Designing or changing a feature → check the module's `specs/` for an existing
-  behavior spec; if one exists, update it in the same PR.
+- Designing or changing a feature → check for an existing behavior spec first:
+  root [`specs/`](specs/README.md) for cross-module features, the module's `specs/`
+  for single-module ones; if one exists, update it in the same PR. New specs are
+  written by the spec-creator agent (spec driven development — see
+  [.claude/agents/README.md](.claude/agents/README.md)).
 - Delegating work instead of doing it inline — planning, implementing, testing,
   reviewing, documenting → check
   [.claude/agents/README.md](.claude/agents/README.md) (fleet map: researcher,
-  brainstorm, planner, implementer, test-writer, architecture-reviewer,
-  plan-verifier, doc-writer, insights-curator — the last one user-invoked via
-  /curate-insights only).
+  brainstorm, spec-creator, implementation-planner, implementer, test-writer,
+  architecture-reviewer, security-reviewer, plan-verifier, doc-writer,
+  insights-curator — the last one user-invoked via /curate-insights only; the
+  /implement-plan skill drives implementer → plan-verifier →
+  architecture-reviewer once a plan is approved).

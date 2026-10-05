@@ -114,3 +114,52 @@ describe("FileCard — inline findings", () => {
     expect(screen.getByText("blocker")).toBeInTheDocument();
   });
 });
+
+describe("FileCard — brief deep-link focus", () => {
+  /** 300 changed lines — far above AUTO_EXPAND_MAX_LINES (200). */
+  const BIG: PrFile = { path: "src/big.ts", additions: 300, deletions: 4, patch: FILE.patch };
+
+  it("focus forces open a file above AUTO_EXPAND_MAX_LINES; a focus for another path leaves it collapsed", () => {
+    renderCard({ file: BIG, focus: { path: "src/big.ts", line: 2 } });
+    expect(screen.getByText("added line")).toBeInTheDocument(); // body rendered
+
+    cleanup();
+    renderCard({ file: BIG, focus: { path: "src/other.ts", line: 2 } });
+    expect(screen.queryByText("added line")).not.toBeInTheDocument();
+  });
+
+  it("scrolls the closest rendered line row into view (exact NEW-side line)", () => {
+    const calls: Element[] = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      calls.push(this);
+    };
+    try {
+      // RIGHT:2 = "added line" — the focus line exactly.
+      renderCard({ focus: { path: "src/pay.ts", line: 2 } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.textContent).toContain("added line");
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig;
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
+
+  it("an out-of-patch line lands on the nearest rendered row (the last NEW-side line)", () => {
+    const calls: Element[] = [];
+    const orig = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      calls.push(this);
+    };
+    try {
+      // Line 99 isn't in the patch — the closest at-or-before row is the last
+      // rendered NEW-side line ("tail", RIGHT:3).
+      renderCard({ focus: { path: "src/pay.ts", line: 99 } });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.textContent).toContain("tail");
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig;
+      else delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
+});

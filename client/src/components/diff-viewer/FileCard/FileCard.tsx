@@ -51,6 +51,7 @@ export function FileCard({
   findings,
   onFindingAction,
   pendingFindingId,
+  focus,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -58,13 +59,43 @@ export function FileCard({
   findings?: FindingRecord[];
   onFindingAction?: (action: FindingActionKind, findingId: string) => void;
   pendingFindingId?: string | null;
+  /** Brief deep-link target when it points at THIS file (DiffViewer filters);
+      null keeps the auto-expand rule and layout untouched. */
+  focus?: { path: string; line: number } | null;
 }) {
   const t = useTranslations("shell");
   const tf = useTranslations("prReview.smartDiff");
+  const focused = focus != null && focus.path === file.path;
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    focused || (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
+  const fileBodyRef = React.useRef<HTMLDivElement>(null);
+
+  // Late-arriving focus (the card rendered before the deep-link landed):
+  // force the file open so the scroll target exists.
+  React.useEffect(() => {
+    if (focused) setOpen(true);
+  }, [focused]);
+
+  // Scroll to the focus line — best-effort (AC-21/edge 11): the closest
+  // rendered NEW-side line at-or-before the target, anchoring by CHILD INDEX
+  // (CodeLine's DOM structure stays untouched). jsdom lacks scrollIntoView, so
+  // the call is feature-checked.
+  React.useEffect(() => {
+    if (!focused || !open) return;
+    const body = fileBodyRef.current;
+    if (!body) return;
+    let idx = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const newNo = lines[i]!.newNo;
+      if (newNo != null && newNo <= focus!.line) idx = i;
+    }
+    const row = body.children[idx] as HTMLElement | undefined;
+    if (row && typeof row.scrollIntoView === "function") {
+      row.scrollIntoView({ block: "center" });
+    }
+  }, [focused, open, lines, focus]);
 
   // The SAME renderedKeys set anchors GitHub comment threads and review
   // findings: a line exists in this patch or it doesn't, for both.
@@ -119,7 +150,7 @@ export function FileCard({
         )}
       </div>
       {open && (
-        <div style={s.fileBody}>
+        <div ref={fileBodyRef} style={s.fileBody}>
           {lines.length === 0 ? (
             <div style={s.noDiff}>{t("diffViewer.noDiffText")}</div>
           ) : (

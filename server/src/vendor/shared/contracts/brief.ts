@@ -2,7 +2,9 @@ import { z } from 'zod';
 
 /**
  * PR Brief building blocks: Intent, Blast radius, Risks, PR History,
- * Smart Diff. Composed into PrBrief.
+ * Smart Diff. Composed into PrBrief (summary, risks, review_focus,
+ * optional intent/blast/history, generation metadata) and served as
+ * the stale-aware PrBriefResponse.
  */
 
 // ---- Intent ----
@@ -119,11 +121,49 @@ export const SmartDiff = z.object({
 });
 export type SmartDiff = z.infer<typeof SmartDiff>;
 
+// ---- Review focus ----
+export const ReviewFocusItem = z.object({
+  file: z.string(),
+  line: z.number().int().positive(),
+  reason: z.string(),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+// ---- Brief generation metadata ----
+export const BriefMissingInput = z.enum([
+  'intent', 'blast', 'description', 'linked_issue', 'attached_specs',
+]);
+export type BriefMissingInput = z.infer<typeof BriefMissingInput>;
+
+export const BriefGeneration = z.object({
+  model: z.string(),
+  cost_usd: z.number().nullable(),
+  prompt_tokens: z.number().int(),
+  completion_tokens: z.number().int(),
+  generated_for_sha: z.string(),
+  generated_at: z.string(),
+  missing_inputs: z.array(BriefMissingInput),
+  dropped_ungrounded: z.number().int(),
+});
+export type BriefGeneration = z.infer<typeof BriefGeneration>;
+
 // ---- Composed PR Brief (pr_brief.json) ----
 export const PrBrief = z.object({
-  intent: Intent,
-  blast: BlastRadius,
+  summary: z.string(),
   risks: Risks,
-  history: PrHistory,
+  review_focus: z.array(ReviewFocusItem),
+  intent: Intent.optional(),
+  blast: BlastRadius.optional(),
+  history: PrHistory.optional(),
+  generation: BriefGeneration,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+// ---- Brief API response (GET/POST /pulls/:id/brief) ----
+export const PrBriefResponse = z.object({
+  pr_id: z.string(),
+  brief: PrBrief.nullable(),
+  current_head_sha: z.string(),
+  stale: z.boolean(),
+});
+export type PrBriefResponse = z.infer<typeof PrBriefResponse>;

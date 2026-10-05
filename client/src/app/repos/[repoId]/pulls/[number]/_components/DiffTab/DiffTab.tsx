@@ -22,9 +22,11 @@ interface DiffTabProps {
   files: PrFile[];
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Brief deep-link target — forwarded to both viewers; null changes nothing. */
+  focus?: { path: string; line: number } | null;
 }
 
-export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
+export function DiffTab({ prId, filesCount, files, canComment, focus }: DiffTabProps) {
   const t = useTranslations("prReview.smartDiff");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
@@ -93,6 +95,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
       findings={inlineFindings}
       onFindingAction={onFindingAction}
       pendingFindingId={pendingFindingId}
+      focus={focus}
     />
   );
 
@@ -154,6 +157,7 @@ export function DiffTab({ prId, filesCount, files, canComment }: DiffTabProps) {
           reviewsExist={reviewsExist}
           pendingFindingId={pendingFindingId}
           onFindingAction={onFindingAction}
+          focus={focus}
         />
       ) : (
         plainViewer

@@ -60,11 +60,13 @@ pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type err-long 
 pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type dot | dot -Tsvg > graph.svg
 ```
 
-## Baseline (2026-10-03, after the project-context composition-root getter)
+## Baseline (2026-10-05, after the brief module's `container.blast` facade getter)
 
-**0 errors, 5 warnings — 193 modules, 634 dependencies.**
+**0 errors, 7 warnings — 207 modules, 694 dependencies.**
 
-History: the 2026-09-20 baseline (after the Wave-2 B14 fix) was
+History: the 2026-10-03 baseline (after the project-context composition-root
+getter) was **0 errors / 5 warnings / 193 modules / 634 deps**; the
+2026-09-20 baseline (after the Wave-2 B14 fix) was
 **0 errors / 4 warnings / 155 modules / 487 deps**; 2026-09-19 baseline was
 **0 errors / 14 warnings / 145 modules /
 454 deps** (the 2026-09-19 R5 fix had already dropped `node_modules` from
@@ -81,16 +83,24 @@ zero, and they were **promoted to `error`** in the same change:
 - `no-cross-module-internals` — was **1 edge** (`repos/service.ts →
   repo-intel/constants.js`) → **0** via B13 (constants hoisted to
   `modules/_shared/job-kinds.ts`). Now error-severity.
-- `no-circular` — **5 cycles**: all five through the composition root — the
+- `no-circular` — **7 cycles**: all seven through the composition root — the
   four repo-intel edges (`repo-intel/service|pipeline ↔ container`) plus
   `project-context/service ↔ container` (added 2026-10-02 by the
   plan-mandated lazy `container.projectContext` facade getter: the service
   imports the `Container` type while the container imports the service — the
   exact shape of the repo-intel edges, accepted per the decision log — see
-  README). The one genuine non-composition cycle (`agents/helpers ↔
-  agents/repository`) was removed by the Wave-2 B14 fix (helpers imports the
-  row types from `db/rows.ts` instead of the repository) and must not
-  return. Retirement for all five: the pending container-cycle policy below.
+  README) plus TWO blast edges (added 2026-10-05 by the plan-mandated lazy
+  `container.blast` facade getter for the brief module, same composition-root
+  shape: `blast/service ↔ container` — the service imports the `Container`
+  type, the container imports the service value — and
+  `blast/helpers → container → blast/service → blast/helpers`, because
+  blast/helpers pre-existingly type-imports `Container` for its
+  `Container['repoIntel']` derivations, a cycle-invisible edge until the
+  container began importing `blast/service`). The one genuine non-composition
+  cycle (`agents/helpers ↔ agents/repository`) was removed by the Wave-2 B14
+  fix (helpers imports the row types from `db/rows.ts` instead of the
+  repository) and must not return. Retirement for all seven: the pending
+  container-cycle policy below.
 
 ## What the gate cannot see
 
@@ -125,12 +135,14 @@ reason and a retirement plan.
 
 **warn (burn down, then promote)**: `no-circular` only. Fix the `agents`
 cycle first (Wave-2 B14: helpers imports row types from `db/rows.ts`),
-then set an explicit policy for the five container-root cycles before any
+then set an explicit policy for the seven container-root cycles before any
 promotion — the four repo-intel edges plus `project-context/service ↔
-container` (same lazy-facade shape, ledgered with them in the baseline
+container` and the two `blast` edges `blast/service ↔ container` /
+`blast/helpers → container → blast/service → blast/helpers` (same
+lazy-facade shape, ledgered with them in the baseline
 above) — they are accepted at the composition root (README), so the likely
 end state is a scoped `pathNot` + a documented acceptance covering all
-five, not a chase to zero.
+seven, not a chase to zero.
 
 When code removes an exception or clears a warn backlog, tighten the config
 in the same change — a lenient setting that outlives its cause silently

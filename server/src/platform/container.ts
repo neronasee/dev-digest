@@ -36,6 +36,8 @@ import { PullsRepository } from '../modules/pulls/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { ProjectContextService } from '../modules/project-context/service.js';
+import { BlastService } from '../modules/blast/service.js';
+import { buildSmartDiff } from '../modules/reviews/smart-diff/smart-diff.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 
@@ -225,6 +227,35 @@ export class Container {
    */
   get projectContext(): ProjectContextService {
     return (this._projectContext ??= new ProjectContextService(this));
+  }
+
+  private _blast?: BlastService;
+
+  /**
+   * The blast module's application service (PR blast radius / prior-PR
+   * overlap) — a lazy facade getter, the same composition-root seam as
+   * `projectContext`, so sibling modules (brief) consume blast without
+   * importing its module internals. This getter adds TWO ledgered
+   * no-circular WARNs, both composition-root cycles:
+   * `blast/service ↔ container` (the service imports the Container type,
+   * the container imports the service value — the repo-intel/
+   * project-context shape) and `blast/helpers → container → blast/service →
+   * blast/helpers` (blast/helpers pre-existingly type-imports Container for
+   * its `Container['repoIntel']` derivations — a cycle-invisible edge until
+   * the container began importing blast/service). Recorded, not chased.
+   */
+  get blast(): BlastService {
+    return (this._blast ??= new BlastService(this));
+  }
+
+  /**
+   * Pure Smart Diff builder (reviews module seam): groups PR files by role.
+   * A container delegation method — the `skillsForPrompt` pattern — because
+   * the composition root MAY import module internals while modules may not
+   * import each other's. No cycle: that module imports only @devdigest/shared.
+   */
+  smartDiffFor(...args: Parameters<typeof buildSmartDiff>): ReturnType<typeof buildSmartDiff> {
+    return buildSmartDiff(...args);
   }
 
   async github(): Promise<GitHubClient> {

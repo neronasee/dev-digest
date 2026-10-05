@@ -66,6 +66,19 @@ flowchart LR
   paths/commands/artifact refs → the surviving document replaces the repo's
   single `onboarding` row whole, so a failed run never destroys the previous
   tour. Generate is capped at 3/min, tighter than the global 120/min.
+- **PR Brief** (`modules/brief`): `GET /pulls/:id/brief` reads the cached
+  brief (or an explicit none-state) plus a staleness flag against the PR's
+  current head SHA — zero model calls; a stored row that fails the contract
+  degrades to `brief: null`, never a 500. `POST /pulls/:id/brief` runs the
+  loop — precomputed facts only (PR title/description, per-file diff stats
+  with Smart Diff roles — never hunk bodies; the stored intent; the
+  non-degraded blast map; the linked issue; the repo's discovered Project
+  Context documents) → **one** structured call on the `risk_brief` model
+  (12,000-token input budget with specs→issue→description truncation order,
+  3,000-token completion cap) → a code-side grounding gate against PR files
+  ∪ blast map → the surviving document replaces the PR's single `pr_brief`
+  row whole, so a failed run never destroys the previous brief. Generate is
+  capped at 3/min, tighter than the global 120/min.
 
 ## API map (starter)
 
@@ -95,6 +108,7 @@ flowchart TB
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast · /pulls/:id/history"]
     onboarding["onboarding<br/>/repos/:id/onboarding · POST …/generate"]
+    brief["brief<br/>/pulls/:id/brief GET|POST"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]

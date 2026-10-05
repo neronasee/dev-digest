@@ -116,12 +116,12 @@ function stubFetch(opts: { reviews?: ReviewRecord[]; smartDiffStatus?: number } 
   });
 }
 
-function renderTab() {
+function renderTab(props: Partial<Parameters<typeof DiffTab>[0]> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
-        <DiffTab prId={PR_ID} filesCount={FILES.length} files={FILES} />
+        <DiffTab prId={PR_ID} filesCount={FILES.length} files={FILES} {...props} />
       </NextIntlClientProvider>
     </QueryClientProvider>,
   );
@@ -237,5 +237,19 @@ describe("SmartDiffView (via DiffTab, real hooks)", () => {
     expect(await screen.findByText("src/pay.ts")).toBeInTheDocument();
     expect(screen.getByText("pnpm-lock.yaml")).toBeInTheDocument();
     expect(screen.queryByText("Boilerplate")).not.toBeInTheDocument();
+  });
+
+  it("brief deep-link: focus on a docs file (COLLAPSED_BY_DEFAULT group) renders that group's body; other collapsed groups stay collapsed", async () => {
+    vi.stubGlobal("fetch", stubFetch());
+    renderTab({ focus: { path: "README.md", line: 1 } });
+
+    // Await a role-view anchor first — while smart-diff loads, the plain
+    // viewer renders every file (INSIGHTS 2026-09-28), which would satisfy
+    // the README query for the wrong reason.
+    await screen.findByText("Docs");
+    // The docs group is collapsed by default, yet the focused file renders.
+    expect(await screen.findByText("README.md")).toBeInTheDocument();
+    // Boilerplate (also collapsed by default, not the focus target) stays shut.
+    expect(screen.queryByText("pnpm-lock.yaml")).not.toBeInTheDocument();
   });
 });

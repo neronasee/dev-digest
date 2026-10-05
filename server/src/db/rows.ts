@@ -26,6 +26,7 @@ export type PrCommitRow = typeof t.prCommits.$inferSelect;
 export type ConventionRow = typeof t.conventions.$inferSelect;
 export type OnboardingRow = typeof t.onboarding.$inferSelect;
 export type PrIntentRow = typeof t.prIntent.$inferSelect;
+export type PrBriefRow = typeof t.prBrief.$inferSelect;
 /**
  * What `upsertIntent` persists: the classification + code-side provenance.
  * Lives here (not in the reviews module) so the repository can type its write

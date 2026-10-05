@@ -56,6 +56,16 @@ flowchart LR
   SSE and `/health*` are exempt.
 - Modules are registered statically in `src/modules/index.ts` (one import + one
   `app.register` each); the engine reaps orphaned `running` runs on boot.
+- **Onboarding Tour** (`modules/onboarding`): `GET /repos/:id/onboarding` reads
+  the stored tour plus repo facts (zero model calls; a stored row that fails
+  the contract degrades to `tour: null`, never a 500).
+  `POST /repos/:id/onboarding/generate` runs the loop — deterministic sample
+  (clone run-artifacts, repo-intel top-ranked files + critical paths + repo
+  map, open PRs) → **one** structured call (model configurable via Settings
+  `feature_models.onboarding`) → a code-side grounding gate drops invented
+  paths/commands/artifact refs → the surviving document replaces the repo's
+  single `onboarding` row whole, so a failed run never destroys the previous
+  tour. Generate is capped at 3/min, tighter than the global 120/min.
 
 ## API map (starter)
 
@@ -84,6 +94,7 @@ flowchart TB
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast · /pulls/:id/history"]
+    onboarding["onboarding<br/>/repos/:id/onboarding · POST …/generate"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]

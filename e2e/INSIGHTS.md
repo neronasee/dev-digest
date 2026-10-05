@@ -27,6 +27,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-03 — The seeded demo repo has NO `repo_index_state` row (seed.ts / scripts/e2e.sh never write one), so repo-intel's `getIndexState` synthesizes a degraded 0-file reply and the Onboarding Tour header renders the em-dash form `generated from index of — files · generated …` — never pin a digit file count in a flow, only the stable fragments (regex over innerText tolerating `—` or digits). (specs/18-onboarding-tour.flow.json, ../server/src/modules/repo-intel/service.ts:190, ../server/src/db/seed.ts)
 - 2026-10-02 — Exact token figures asserted in flows over the seeded project-context fixture are ceil(JS-string-length/4) of the seed constants, NOT wc -c bytes: the fixture's em-dash makes specs/api-layering.md 578 bytes but 576 chars → 144 tokens (chip `≈144 tk`, page footer `≈357` = 144+96+117), and the trace's `~158 tokens` is ceil(wrapUntrusted(path, content).length/4) — always compute expectations from ../server/src/db/seed-context.ts. (specs/15-project-context-page.flow.json, specs/17-run-trace-project-context.flow.json)
 - 2026-09-21 — A 'seed'-model `agent_runs` row + hand-built `run_traces` doc in seed.ts lets flows assert trace rendering (skills block, log lines) with zero model calls — the flow opens the PR's Agent runs tab and clicks the run's Trace MonoLink like any real run. (../server/src/db/seed.ts, specs/13-run-trace-skills.flow.json)
 

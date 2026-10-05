@@ -30,6 +30,13 @@ export const NAV: NavGroup[] = [
         href: "/repos/:repoId/context",
         gKey: "x",
       },
+      {
+        key: "onboarding-tour",
+        label: "Onboarding Tour",
+        icon: "Map",
+        href: "/repos/:repoId/onboarding-tour",
+        gKey: "o",
+      },
     ],
   },
   {
@@ -76,6 +83,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "g a", label: "Go to Agents", group: "Navigation" },
   { keys: "g c", label: "Go to Conventions", group: "Navigation" },
   { keys: "g x", label: "Go to Project Context", group: "Navigation" },
+  { keys: "g o", label: "Go to Onboarding Tour", group: "Navigation" },
   { keys: "j / k", label: "Next / previous finding", group: "Findings" },
   { keys: "a", label: "Accept finding", group: "Findings" },
   { keys: "d", label: "Dismiss finding", group: "Findings" },

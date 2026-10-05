@@ -15,6 +15,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-03 — For a feature-model-driven LLM call, the it-lane mock must sit on the provider slot the REGISTRY default names (onboarding → `overrides.llm.openrouter`), not `'openai'` by habit — and the settings-override test injects the override's provider slot too, so both the default and the override path stay mocked. (test/onboarding.it.test.ts, src/modules/_shared/feature-models.ts)
+
 - 2026-09-28 — The persistent repo-intel blast path returns `degraded: false` even when `repo_index_state.status = 'partial'` (only the flag-off/no-index fallbacks set the flag), so a consumer that must surface partial-ness reads `getIndexState()` once alongside `getBlastRadius()` and folds it into the reason chain — never trust `result.degraded` alone. (src/modules/blast/service.ts)
 - 2026-09-25 — When the user's pnpm major (12.x) rewrites the lockfile with peer-suffix churn (`(supports-color@7.2.0)` annotations across ~20 debug dependents) on any `pnpm add`, a minimal-diff install is still possible entirely through the package manager: `npm exec --package=pnpm@10.x -- pnpm add <pkg> --lockfile-only` writes the lockfile in the old format, then the user's own `pnpm install --frozen-lockfile` links node_modules WITHOUT rewriting it. (pnpm-lock.yaml, package.json)
 - 2026-09-22 — Optional facade reads (repo-intel sampling extras) must be wrapped in a try/catch INSIDE an async helper, not just `.catch()`: a test double injected as `as unknown as RepoIntel` throws SYNCHRONOUSLY on a missing method (`undefined is not a function`) before any promise exists, so promise-level rejection handling never fires and the route 500s. `safe(fn, fallback)` in conventions/service.ts is the pattern. (src/modules/conventions/service.ts)
@@ -34,6 +36,13 @@ Contract:
 ## Codebase Patterns
 
 <!-- newest on top -->
+
+- 2026-10-03 — Prompt levers on a flash-tier model exhaust into run-to-run variance (live regens alternated between respecting and ignoring the same EXCLUDE list); the durable fixes are code-side and deterministic — rebalance the rank sample per top-level component (`balanceSampleByDir` over a 48-file pool with per-dir quotas) so the smaller side is citable AT ALL, and curate the candidate feed (`isPlumbingPath`) so fan-in plumbing is never offered, while the citable universe stays raw (reading_path may still cite it). (src/modules/onboarding/helpers.ts, src/modules/onboarding/service.ts)
+
+- 2026-10-03 — When a grounding gate keeps dropping a model's honest output (live round 2: run_locally still emitted bare root commands for a two-package repo even with correct per-dir facts), stop describing the rule in prose and DERIVE the exact accepted vocabulary from the same facts the gate checks — `enumerateGroundableCommands` → the RUN COMMANDS prompt section — so prompt and gate agree by construction, pinned by a unit test asserting every enumerated command passes `verifyRunSteps`. (src/modules/onboarding/helpers.ts, src/modules/onboarding/service.ts)
+
+- 2026-10-03 — A root-only artifact wish-list is structurally blind to multi-package repos (live: burnjohn/quick-blog keeps its manifests in client/ and server/, so the gate derived "no manifest" and dropped every honest run step) — probe a second tier of common workspace dirs (`RUN_ARTIFACT_DIRS`) and keep run-step grounding facts PER DIRECTORY, so `cd <dir> && <cmd>` validates against that dir's own manifest while plain commands still require the root one. (src/modules/onboarding/constants.ts, src/modules/onboarding/helpers.ts)
+- 2026-10-03 — Fan-in centrality ranks plumbing over product when the audience is a newcomer (live: `client/src/api/axiosConfig.js` surfaced as the #2 "critical path" — mechanically correct, pedagogically noise): repo-intel's critical-path chains are CANDIDATES for a human-facing section, and the prompt must say so and demote HTTP-client wrappers, generated code, barrel re-exports and pure config unless that concern IS the repo's subject. (src/modules/onboarding/prompt.ts)
 
 - 2026-10-02 — A container facade getter (`container.projectContext`) necessarily adds one `no-circular` WARN of the ledgered composition-root category (service imports `Container` type, container imports the service value — repo-intel's four baseline warns are the same shape), so a plan-mandated facade grows the count by exactly one; record it, don't chase it. (src/platform/container.ts, src/modules/project-context/service.ts)
 - 2026-10-02 — `repos.clone_path` has TWO formats: real clone jobs persist an ABSOLUTE path (`clonePathFor` output) while the project-context seed persists the RELATIVE `clones/acme/payments-api` (resolves against the API's server/ cwd) — any clone consumer must run it through `resolveClonePath`, not join it blindly. (src/modules/project-context/reader.ts, src/db/seed-context.ts)
@@ -56,6 +65,10 @@ Contract:
 ## Tool & Library Notes
 
 <!-- newest on top -->
+
+- 2026-10-03 — An "or null when it adds nothing" escape hatch in a generation prompt is taken literally by a low-temperature model (live: deepseek emitted a null Mermaid diagram for an obviously multi-layer repo and the section rendered prose-only): when an output is wanted in the common case, make it REQUIRED in the prompt and enumerate the narrow null condition ("only a genuinely single-component repo") instead. (src/modules/onboarding/prompt.ts)
+
+- 2026-10-03 — `MockGitClient.readFile` returns `''` for a missing path while `SimpleGitClient.readFile` throws: a clone wish-list loop must treat a falsy/blank read as "not present" (never only a catch), or the mock lane silently feeds empty artifacts a real clone would have skipped. (src/adapters/mocks.ts, src/modules/onboarding/service.ts)
 
 - 2026-09-25 — picomatch 4.x ships NO bundled TypeScript declarations (contrary to what a plan may assert), and `@types/picomatch` would add a dependency — for the one-function surface the smart-diff classifier needs, a 10-line ambient `declare module 'picomatch'` in `src/types/picomatch.d.ts` is the zero-lockfile-cost fix. (src/types/picomatch.d.ts)
 - 2026-09-25 — An UNAPPLIED migration can be cleanly regenerated: delete its `NNNN_*.sql` + `meta/NNNN_snapshot.json` and the matching `_journal.json` entry, fix the schema, re-run `pnpm db:generate` — drizzle-kit emits a fresh NNNN at the same index (used twice on 0015: contract-forced column additions, then `real`→`double precision`); APPLIED migrations and 0000–0014 stay untouchable. (src/db/migrations/0015_dapper_the_spike.sql)

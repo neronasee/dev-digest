@@ -24,6 +24,7 @@ export type ReviewRow = typeof t.reviews.$inferSelect;
 export type PrFileRow = typeof t.prFiles.$inferSelect;
 export type PrCommitRow = typeof t.prCommits.$inferSelect;
 export type ConventionRow = typeof t.conventions.$inferSelect;
+export type OnboardingRow = typeof t.onboarding.$inferSelect;
 export type PrIntentRow = typeof t.prIntent.$inferSelect;
 /**
  * What `upsertIntent` persists: the classification + code-side provenance.

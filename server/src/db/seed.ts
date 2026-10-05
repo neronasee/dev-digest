@@ -32,6 +32,7 @@ import {
   DEMO_CLONE_PATH,
   ensureContextFixture,
 } from './seed-context.js';
+import { DEMO_TOUR } from './seed-onboarding.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -537,6 +538,22 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       confidence: c.confidence,
       occurrences: c.occurrences,
       status: c.status,
+    });
+  }
+
+  // ---- Onboarding Tour: one contract-valid demo tour ----
+  // Zero model calls: the seeded row is what the studio page, the client
+  // tests and the e2e flow read. Idempotent by absence — a re-seed never
+  // overwrites a tour the user generated for real.
+  const [existingTour] = await db
+    .select({ repoId: t.onboarding.repoId })
+    .from(t.onboarding)
+    .where(eq(t.onboarding.repoId, repoId));
+  if (!existingTour) {
+    await db.insert(t.onboarding).values({
+      repoId,
+      json: DEMO_TOUR,
+      generatedAt: new Date(),
     });
   }
 

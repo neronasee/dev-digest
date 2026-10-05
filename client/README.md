@@ -31,6 +31,7 @@ flowchart TD
   SKILLS["/skills<br/>Skills Lab cards"] --> SKILL["/skills/:id<br/>editor (config · preview · versioning)"]
   CONV["/repos/:repoId/conventions<br/>triage board → create-skill modal"]
   CTX["/repos/:repoId/context<br/>Project Context (read-only)"]
+  TOUR["/repos/:repoId/onboarding-tour<br/>Onboarding Tour (five sections · TOC/scroll-spy · Regenerate)"]
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
@@ -39,6 +40,7 @@ flowchart TD
   SKILLS -->|"GET/POST /skills · GET/PUT/DELETE /skills/:id<br/>GET /skills/:id/versions · useImportSkillFromUrl → POST /skills/import-url<br/>useSkillContextSet/useSetSkillContext → GET|PUT /skills/:id/context"| API
   CONV -->|"GET /repos/:id/conventions · POST …/extract · POST …/skill<br/>PATCH/DELETE /conventions/:id · POST /agents/:id/skills (link)"| API
   CTX -->|"useProjectDocuments · useProjectDocument · useDocumentUsage · useRescanDocuments<br/>GET /repos/:id/documents · …/content?path= · …/usage · POST …/rescan"| API
+  TOUR -->|"useOnboardingTour · useGenerateOnboardingTour<br/>GET /repos/:id/onboarding · POST /repos/:id/onboarding/generate"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
 

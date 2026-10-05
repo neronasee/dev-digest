@@ -80,6 +80,7 @@ import {
   PanelRight,
   CornerDownRight,
   GripVertical,
+  Map,
   type LucideIcon,
 } from "lucide-react";
 
@@ -164,6 +165,7 @@ export const Icon = {
   PanelRight,
   CornerDownRight,
   GripVertical,
+  Map,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof Icon;

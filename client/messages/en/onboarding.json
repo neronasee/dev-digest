@@ -1,15 +1,56 @@
 {
   "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
-  "regenerate": "Regenerate",
-  "regenerating": "Regenerating…",
-  "unknownError": "Unknown error",
-  "generate": {
-    "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
-    "cta": "Generate onboarding tour",
-    "generating": "Generating…"
+  "crumb": "Onboarding Tour",
+  "subtitle": "A guided introduction generated from what DevDigest already knows about this repository — every cited path, command, and task is mechanically verified against it.",
+  "facts": {
+    "generatedFrom": "generated from index of {count} files · generated {age}",
+    "modelChip": "{model} · {cost}"
+  },
+  "toc": {
+    "label": "On this page",
+    "progress": "{count} of {total} read"
+  },
+  "sections": {
+    "architecture": {
+      "title": "Architecture overview",
+      "empty": "No architecture overview was generated."
+    },
+    "critical-paths": {
+      "title": "Critical paths",
+      "empty": "No critical paths survived verification against the repository."
+    },
+    "run-locally": {
+      "title": "How to run locally",
+      "empty": "No recognizable run configuration was found in the clone."
+    },
+    "reading-path": {
+      "title": "Guided reading path",
+      "empty": "No reading path survived verification against the repository."
+    },
+    "first-tasks": {
+      "title": "First tasks",
+      "empty": "No grounded starter task right now — there may be no open pull requests to anchor one."
+    }
+  },
+  "actions": {
+    "regenerate": "Regenerate",
+    "regenerating": "Generating…",
+    "regenerateFailed": "Generation failed — the previous tour is unchanged.",
+    "share": "Share link",
+    "shared": "Link copied",
+    "shareFailed": "Couldn’t copy automatically — copy it from the address bar:",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Couldn’t copy — select the command text above.",
+    "open": "Open",
+    "done": "Done",
+    "collapseSection": "Collapse {section}",
+    "expandSection": "Expand {section}"
+  },
+  "empty": {
+    "title": "No onboarding tour yet",
+    "body": "Generate one from what DevDigest already knows: the repo’s index, its cloned files, and its open pull requests. The repository needs to be imported with a local clone and an index first.",
+    "cta": "Generate onboarding tour"
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"

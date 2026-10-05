@@ -11,6 +11,7 @@
  *  - contracts/platform   Settings, ConnTestResult, Repo, PrMeta/PrDetail,
  *                         Project Context (ProjectDoc, ContextAttachment, …)
  *  - adapters             adapter interfaces + ModelInfo
+ *  - contracts/onboarding Onboarding Tour document, facts, response DTO
  *
  * Feature agents (A1–A6) and F2 import everything from here. The barrel is
  * stable — feature agents EXTEND with new files, they do not edit existing ones.
@@ -28,3 +29,4 @@ export * from './contracts/eval-ci.js';
 export * from './contracts/observability.js';
 export * from './contracts/productionize.js';
 export * from './adapters.js';
+export * from './contracts/onboarding.js';

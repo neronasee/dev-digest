@@ -82,7 +82,9 @@ jobs:
           # tsx directly (not `pnpm start`): the committed package.json's start
           # is `node dist/server.js`, which would need a build first. tsx runs
           # the TS entrypoint as dev does. (server/package.json is skip-worktree.)
-          nohup pnpm exec tsx src/server.ts > "$RUNNER_TEMP/api.log" 2>&1 &
+          # Browser flows can exceed the production 120-request/minute global cap;
+          # test mode disables that cap while leaving route behavior intact.
+          NODE_ENV=test nohup pnpm exec tsx src/server.ts > "$RUNNER_TEMP/api.log" 2>&1 &
           echo "waiting for API /health…"
           for i in $(seq 1 30); do
             curl -fsS http://localhost:3001/health >/dev/null 2>&1 && { echo "api up"; break; }

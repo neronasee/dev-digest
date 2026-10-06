@@ -136,9 +136,10 @@ log "seeding demo data (isolated db)"
 
 # --- API on :$API_PORT -------------------------------------------------------
 # tsx directly (not `pnpm start`, which needs a build; not `tsx watch`, to avoid
-# a mid-suite watcher restart).
+# a mid-suite watcher restart). Test mode disables the global 120/minute rate
+# limit: browser flows make many requests from one local address.
 log "starting API on :$API_PORT"
-(cd server && pnpm exec tsx src/server.ts) &
+(cd server && NODE_ENV=test pnpm exec tsx src/server.ts) &
 SERVER_PID=$!
 log "waiting for API /health"
 api_up=0

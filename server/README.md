@@ -56,6 +56,16 @@ flowchart LR
   SSE and `/health*` are exempt.
 - Modules are registered statically in `src/modules/index.ts` (one import + one
   `app.register` each); the engine reaps orphaned `running` runs on boot.
+- **Onboarding Tour** (`modules/onboarding`): `GET /repos/:id/onboarding` reads
+  the stored tour plus repo facts (zero model calls; a stored row that fails
+  the contract degrades to `tour: null`, never a 500).
+  `POST /repos/:id/onboarding/generate` runs the loop — deterministic sample
+  (clone run-artifacts, repo-intel top-ranked files + critical paths + repo
+  map, open PRs) → **one** structured call (model configurable via Settings
+  `feature_models.onboarding`) → a code-side grounding gate drops invented
+  paths/commands/artifact refs → the surviving document replaces the repo's
+  single `onboarding` row whole, so a failed run never destroys the previous
+  tour. Generate is capped at 3/min, tighter than the global 120/min.
 
 ## API map (starter)
 
@@ -78,9 +88,13 @@ flowchart TB
     skills["skills<br/>/skills · /skills/:id · /skills/:id/versions · POST /skills/import-url"]
     conventions["conventions<br/>/repos/:id/conventions · /repos/:id/conventions/(extract|skill)<br/>PATCH/DELETE /conventions/:id"]
   end
+  subgraph ProjectContext["Project Context"]
+    projectContext["project-context<br/>/repos/:id/documents · …/rescan · …/content?path= · …/usage<br/>GET|PUT /agents/:id/context · /skills/:id/context (?repo_id=)"]
+  end
   subgraph Intel["Repo intelligence"]
     repoIntel["repo-intel<br/>/repos/:id/index-state · /resync"]
     blast["blast<br/>/pulls/:id/blast · /pulls/:id/history"]
+    onboarding["onboarding<br/>/repos/:id/onboarding · POST …/generate"]
   end
   subgraph Platform["Platform"]
     settings["settings<br/>/settings · /providers"]
@@ -113,7 +127,11 @@ Migrations are **not** applied on boot — run `pnpm db:migrate` (pgvector is
 enabled by migration `0000`). `pnpm db:seed` is idempotent demo data
 (`acme/payments-api`, PR #482–#484, the five built-in agents, and the eight
 Skills Lab skills — see [`specs/02-skills.md`](specs/02-skills.md) for the
-skills trust/versioning decisions).
+skills trust/versioning decisions). The seed also writes the read-only fixture
+clone `clones/acme/payments-api/{specs,docs,insights}/` and points the demo
+repo's `clone_path` at it, so Project Context discovery and the PR #483 demo
+trace (with its `## Project context` block) work identically in dev, e2e, and
+CI with zero network.
 
 ## Review context (non-obvious)
 
@@ -138,6 +156,13 @@ What the reviewer actually sends to the model is assembled in
 - **Grounding is mandatory.** Every finding must cite a line that exists in the
   diff or it is dropped (`groundFindings`), and the score is recomputed from the
   surviving findings — the model's self-reported score is ignored.
+- **Project context is read from the repo's clone at run time.** Agents and
+  skills can attach repo markdown documents (per repo, ordered paths only —
+  never stored text); the run-executor composes them into the untrusted
+  `## Project context` block (`modules/project-context`, zero LLM calls,
+  fail-open on any error, per-doc/block caps). Discovery is confined under
+  `repos.clone_path` by a realpath check. Decisions — trust model, versioning,
+  caps, drop semantics — live in [`specs/07-project-context.md`](specs/07-project-context.md).
 
 ## Testing
 

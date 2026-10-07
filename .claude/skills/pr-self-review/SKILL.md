@@ -62,6 +62,16 @@ short-circuit on a violation; complete every step so the report is whole.
 package directory. Never run `*.it.test.ts` suites (Docker) or `e2e` `npm
 test` (hermetic stack) — see Guardrails.
 
+**Evidence reuse (narrow exception).** A Table B check may be reported as
+`REUSED — tree unchanged since <git-ref>` instead of re-run, only when BOTH
+hold: (a) you can prove the package's source paths are byte-identical to a
+named ref where that exact check ran green — `git diff --quiet <ref> -- <pkg
+paths>` exits 0 — and (b) that prior green run's evidence is citable (this
+session's ledger, or CI) and used the same command. Record the ref and the
+prior-evidence source in the Mechanical checks table. Anything short of both
+conditions is a fresh re-run; reuse never applies to Docker/hermetic-stack
+lanes this gate doesn't run anyway.
+
 **5 — Skill-guided review.** Inline by default, group by group (client /
 server / core / e2e): read the engaged skill's `SKILL.md` (and only the
 reference file relevant to the hunks, when the skill directs), then review

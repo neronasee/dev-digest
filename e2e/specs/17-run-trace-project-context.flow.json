@@ -1,0 +1,74 @@
+{
+  "name": "Run trace shows the Specs read chip and the Project context block's token attribution",
+  "description": "Open the seeded PR #483, switch to Agent runs, open the seeded run's Trace drawer, expand Prompt assembly, and confirm the project-context rendering end to end: the Configuration section gains a 'Specs read' row whose chip carries the path AND its mechanical token estimate ('specs/api-layering.md · ≈144 tk'), and the Prompt assembly section shows the 'Project context (dynamic)' block WITH its '~158 tokens' attribution label — the chip and the block's token count are asserted TOGETHER by the final wait --fn, which walks to the prompt-row div holding the block label so the token figure is provably the Project context block's own (not the skills block's). The seeded run's trace was persisted with the path-labeled untrusted wrapper, specs_read, and specs_tokens (144 = ceil(576/4) doc chars; 158 = ceil(632/4) wrapped-block chars), so this pins AC-18's trace rendering with zero model calls. The chip itself may sit below the drawer's inner fold, so it is asserted over innerText, never --text; the expand is the flow-13 GUARDED wait --fn (coordinate clicks silently miss below the fold, and TraceSection children stay unmounted while collapsed). Labels are DOM-cased; never locate on Badge content.",
+  "steps": [
+    {
+      "cmd": ["open", "{BASE}/"],
+      "label": "load the app root"
+    },
+    {
+      "cmd": ["wait", "--url", "/pulls"],
+      "label": "land on the PR list"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "PR list settles"
+    },
+    {
+      "cmd": ["find", "text", "Add refund endpoint with happy-path test", "click"],
+      "label": "open the seeded experiment PR #483"
+    },
+    {
+      "cmd": ["wait", "--url", "/pulls/483"],
+      "label": "PR detail route reached"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "PR detail settles"
+    },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Agent runs"],
+      "label": "switch to the Agent runs tab"
+    },
+    {
+      "cmd": ["wait", "--url", "tab=findings"],
+      "label": "runs tab active in the URL"
+    },
+    {
+      "cmd": ["wait", "--text", "Test Quality Reviewer"],
+      "label": "the seeded run's agent row renders"
+    },
+    {
+      "cmd": ["find", "text", "Trace", "click"],
+      "label": "open the run's trace drawer"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "trace fetch settles"
+    },
+    {
+      "cmd": ["wait", "--text", "Specs read"],
+      "label": "the Configuration section gains the Specs read row (the chip itself is asserted via innerText below — it can sit below the drawer fold)"
+    },
+    {
+      "cmd": ["wait", "--text", "Prompt assembly"],
+      "label": "the prompt-assembly section renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const el = Array.from(document.querySelectorAll('span')).find((s) => s.textContent === 'Prompt assembly'); if (!el) return false; if (document.body.innerText.includes('User / diff')) return true; el.scrollIntoView({ block: 'center' }); el.closest('div').click(); return false; }"
+      ],
+      "label": "expand the collapsed Prompt assembly section (guarded click — coordinate clicks miss below the fold)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const t = document.body.innerText; if (!/specs\\/api-layering\\.md\\s*·\\s*≈\\s*144\\s*tk/.test(t)) return false; const label = Array.from(document.querySelectorAll('span')).find((s) => s.textContent === 'Project context (dynamic)'); if (!label) return false; const head = label.closest('div'); return !!head && /~\\s*158\\s*tokens/.test(head.textContent); }"
+      ],
+      "label": "TOGETHER: the Specs read chip shows specs/api-layering.md · ≈144 tk, and the Project context (dynamic) block's own row carries its ~158 tokens attribution"
+    }
+  ]
+}

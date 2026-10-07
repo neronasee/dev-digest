@@ -11,6 +11,7 @@ import {
   Onboarding,
   EvalRun,
   MemoryItem,
+  PromptAssembly,
   RunTrace,
   Settings,
   Repo,
@@ -166,6 +167,55 @@ describe('AI contracts parse fixtures', () => {
       log: [{ t: '00.00', kind: 'info', msg: 'started' }],
     });
     expect(trace.tool_calls).toHaveLength(1);
+  });
+
+  // ---- Project Context legacy tolerance (AC-20) ----
+
+  it('legacy RunTrace with specs_read: [] and plain-string entries parses', () => {
+    const empty = RunTrace.parse({
+      config: { agent: 'a', version: '1', model: 'm', pr: 1, source: 'local' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '0/0 passed' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '',
+      memory_pulled: [],
+      specs_read: [],
+      log: [],
+    });
+    expect(empty.specs_read).toEqual([]);
+
+    const strings = RunTrace.parse({
+      config: { agent: 'a', version: '1', model: 'm', pr: 1, source: 'local' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '0/0 passed' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '',
+      memory_pulled: [],
+      specs_read: ['specs/a.md', 'docs/b.md'],
+      log: [],
+    });
+    expect(strings.specs_read).toEqual(['specs/a.md', 'docs/b.md']);
+  });
+
+  it('RunTrace specs_read accepts the object form and mixes it with legacy strings', () => {
+    const mixed = RunTrace.parse({
+      config: { agent: 'a', version: '1', model: 'm', pr: 1, source: 'local' },
+      stats: { duration_ms: 1, tokens_in: 1, tokens_out: 1, cost_usd: null, findings: 0, grounding: '0/0 passed' },
+      prompt_assembly: { system: 's', user: 'u' },
+      tool_calls: [],
+      raw_output: '',
+      memory_pulled: [],
+      specs_read: ['specs/legacy.md', { path: 'specs/new.md', tokens: 42 }],
+      log: [],
+    });
+    expect(mixed.specs_read).toEqual(['specs/legacy.md', { path: 'specs/new.md', tokens: 42 }]);
+  });
+
+  it('PromptAssembly parses without specs_tokens (legacy) and with it', () => {
+    const legacy = PromptAssembly.parse({ system: 's', user: 'u', specs: null });
+    expect(legacy.specs_tokens).toBeUndefined();
+    const stamped = PromptAssembly.parse({ system: 's', user: 'u', specs: 'block', specs_tokens: 158 });
+    expect(stamped.specs_tokens).toBe(158);
   });
 });
 

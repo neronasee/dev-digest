@@ -1,0 +1,90 @@
+{
+  "name": "Onboarding Tour: seeded five-section tour, header facts, TOC + scroll-spy, collapse",
+  "description": "Open the Onboarding Tour page from the WORKSPACE sidebar (text locator — role link does not resolve NavItem's nested icon+label anchor) and pin the read-only surface over the SEEDED demo tour (zero model calls — Regenerate and the empty-state Generate CTA are never clicked): the mechanical header facts line and the 'seed · —' model chip (asserted together via wait --fn over innerText — the file count depends on the seed's index state and the age string is Intl.RelativeTimeFormat output, so only the stable fragments 'generated from index of … files · generated ' are pinned), the five seeded section titles, the grounded seeded content (src/api/users.ts, npm install, docker compose up -d, npm run dev, specs/api-layering.md, PR #482), the 'On this page' TOC rail (the label is CSS-uppercased by SectionLabel, so it is asserted case-insensitively over innerText plus the nav's literal aria-label) with the session-local '0 of 5 read' progress chip before any scrolling, a TOC jump to First tasks proven by getBoundingClientRect, the scroll-spy's aria-current landing on that entry with the read count off zero, and a guarded collapse of Critical paths (aria-label 'Collapse Critical paths' while expanded → the body unmounts, aria-expanded flips to false, the label becomes 'Expand Critical paths', the section root keeps its anchor, and the card's seeded text leaves the DOM). Deep-card text sits below the fold of the shell's overflow-auto main (wait --text only sees the visible scroll viewport), so content assertions run over document.body.innerText; the TOC and collapse actions are GUARDED --fn DOM clicks that only act while their pre-state holds, so repeated polls can never toggle back (flow-16 pattern).",
+  "steps": [
+    {
+      "cmd": ["open", "{BASE}/"],
+      "label": "load the app root"
+    },
+    {
+      "cmd": ["wait", "--url", "/pulls"],
+      "label": "root redirects to the seeded repo's PR list"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "repo context resolves — sidebar hrefs carry the real repo id"
+    },
+    {
+      "cmd": ["find", "text", "Onboarding Tour", "click"],
+      "label": "open Onboarding Tour from the WORKSPACE sidebar section (text locator — role link does not resolve NavItem's nested icon+label structure)"
+    },
+    {
+      "cmd": ["wait", "--url", "/onboarding-tour"],
+      "label": "tour route reached"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "tour fetch settles — the seeded tour renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => /generated\\s+from\\s+index\\s+of\\s+[\\s\\S]{1,4}?\\s+files\\s+·\\s+generated\\s+/.test(document.body.innerText) && document.body.innerText.includes('seed · —')"
+      ],
+      "label": "header facts render — 'generated from index of … files · generated …' (count and age are seed-run-dependent, so only the stable fragments are pinned) plus the seeded generation's model chip 'seed · —'"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const nav = document.querySelector('nav[aria-label=\"On this page\"]'); if (!nav) return false; const titles = ['Architecture overview', 'Critical paths', 'How to run locally', 'Guided reading path', 'First tasks']; return titles.every((t) => document.body.innerText.includes(t)) && /on this page/i.test(document.body.innerText); }"
+      ],
+      "label": "the TOC rail is labeled 'On this page' (SectionLabel uppercases via CSS text-transform — case-insensitive innerText plus the nav's literal aria-label) and all five seeded section cards render"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => ['npm install', 'docker compose up -d', 'npm run dev', 'specs/api-layering.md', 'src/api/users.ts', '#482'].every((s) => document.body.innerText.includes(s))"
+      ],
+      "label": "the seeded grounded content renders — run commands, the cited critical path, the reading-path doc, and the anchored PR #482 (innerText: deep cards sit below the fold of the scrolling main)"
+    },
+    {
+      "cmd": ["wait", "--text", "0 of 5 read"],
+      "label": "session-local read progress starts at zero — nothing has been scrolled yet"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const nav = document.querySelector('nav[aria-label=\"On this page\"]'); if (!nav) return false; const btn = Array.from(nav.querySelectorAll('button')).find((b) => b.textContent.trim() === 'First tasks'); const card = document.getElementById('first-tasks'); if (!btn || !card) return false; const r = card.getBoundingClientRect(); if (r.top >= 0 && r.top < window.innerHeight * 0.6) return true; btn.click(); return false; }"
+      ],
+      "label": "TOC jump — click 'First tasks' (guarded: only while the card is out of view) and assert the target card scrolled into view via getBoundingClientRect"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const nav = document.querySelector('nav[aria-label=\"On this page\"]'); if (!nav) return false; const btn = Array.from(nav.querySelectorAll('button')).find((b) => b.textContent.trim() === 'First tasks'); return !!btn && btn.getAttribute('aria-current') === 'true' && /[1-5] of 5 read/.test(document.body.innerText); }"
+      ],
+      "label": "scroll-spy — the 'First tasks' TOC entry carries aria-current and the read count left zero (sections crossed the reading band on the way down)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const btn = document.querySelector('button[aria-controls=\"tour-section-critical-paths\"]'); if (!btn) return false; if (!document.getElementById('tour-section-critical-paths')) return true; if (btn.getAttribute('aria-label') !== 'Collapse Critical paths') return false; btn.click(); return false; }"
+      ],
+      "label": "collapse Critical paths (guarded DOM click while the body is still mounted — repeated polls can never expand it back); the control is labeled 'Collapse Critical paths' while expanded"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const btn = document.querySelector('button[aria-controls=\"tour-section-critical-paths\"]'); if (!btn) return false; return btn.getAttribute('aria-expanded') === 'false' && btn.getAttribute('aria-label') === 'Expand Critical paths' && !!document.getElementById('critical-paths') && !document.getElementById('tour-section-critical-paths') && !document.body.innerText.includes('Token-bucket limiter'); }"
+      ],
+      "label": "collapsed — aria-expanded flips to false, the control relabels to 'Expand Critical paths', the section root keeps its anchor, and the card's body (its seeded text) left the DOM"
+    }
+  ]
+}

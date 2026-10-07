@@ -1,24 +1,42 @@
 {
-  "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
-  "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+  "page": {
+    "title": "Project Context",
+    "subtitle": "Markdown documents discovered from this repository's local clone. Read at review time as untrusted context — never stored or edited here.",
+    "rescan": "Re-scan",
+    "rescanning": "Scanning…",
+    "loadError": "Couldn't load documents.",
+    "usage": "Used by {count, plural, one {# agent} other {# agents}}",
+    "footer": "{count, plural, one {# file} other {# files}} · ≈{tokens} tokens · refreshed {time}",
+    "treeTitle": "Documents",
+    "readerEmpty": "Select a document to read it.",
+    "noClone": {
+      "title": "No local clone yet",
+      "body": "Import or sync this repository first — documents are read from its local clone."
+    },
+    "empty": {
+      "title": "No markdown documents found",
+      "body": "No .md files were found under the configured roots. Add documents to the repository itself (e.g. under specs/, docs/, insights/) and re-scan."
+    }
   },
-  "mode": {
-    "preview": "preview",
-    "edit": "edit"
-  },
-  "editor": {
-    "loadError": "Couldn’t load spec",
-    "save": "Save",
-    "saving": "Saving…"
+  "picker": {
+    "filterLabel": "Filter documents",
+    "filterPlaceholder": "Filter documents…",
+    "attachedCount": "{attached} of {total} attached",
+    "orderHint": "Order matters — earlier documents appear earlier in the “## Project context” block. Tick to attach; drag or use the arrows to reorder.",
+    "dragHandle": "Drag to reorder",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "preview": "Preview",
+    "docTokens": "≈{count} tk",
+    "missing": "missing",
+    "missingHint": "Attached but not currently discovered — uncheck to remove it from the set.",
+    "footerTokens": "≈{count} tokens",
+    "footerNoteAgent": "The attached set is injected as an untrusted “## Project context” block into every run of this agent for the selected repo.",
+    "footerNoteSkill": "The attached set is injected as an untrusted “## Project context” block into every run of an agent using this skill for the selected repo.",
+    "skillInheritanceNote": "Any agent using this skill inherits these documents for the selected repo (merged after the agent's own set, deduplicated by path).",
+    "serializesAs": "SERIALIZES AS",
+    "serializesEmpty": "(nothing attached yet)",
+    "noClone": "Import or sync this repository first — documents are read from its local clone.",
+    "emptyCloned": "No markdown documents discovered under the configured roots. Add them to the repository itself, then re-scan from the Project Context page."
   }
 }

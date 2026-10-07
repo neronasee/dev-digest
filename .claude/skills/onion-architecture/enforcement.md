@@ -60,11 +60,13 @@ pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type err-long 
 pnpm exec depcruise src --config .dependency-cruiser.cjs --output-type dot | dot -Tsvg > graph.svg
 ```
 
-## Baseline (2026-09-20, after the Wave-2 B14 fix)
+## Baseline (2026-10-03, after the project-context composition-root getter)
 
-**0 errors, 4 warnings — 155 modules, 487 dependencies.**
+**0 errors, 5 warnings — 193 modules, 634 dependencies.**
 
-History: 2026-09-19 baseline was **0 errors / 14 warnings / 145 modules /
+History: the 2026-09-20 baseline (after the Wave-2 B14 fix) was
+**0 errors / 4 warnings / 155 modules / 487 deps**; 2026-09-19 baseline was
+**0 errors / 14 warnings / 145 modules /
 454 deps** (the 2026-09-19 R5 fix had already dropped `node_modules` from
 `exclude` so npm edges are visible; the pre-R5 config cruised 125 modules /
 375 deps but could not see npm imports at all). The Wave-1 burn-down
@@ -79,11 +81,16 @@ zero, and they were **promoted to `error`** in the same change:
 - `no-cross-module-internals` — was **1 edge** (`repos/service.ts →
   repo-intel/constants.js`) → **0** via B13 (constants hoisted to
   `modules/_shared/job-kinds.ts`). Now error-severity.
-- `no-circular` — **4 cycles**: all four through the composition root
-  (`repo-intel/service|pipeline ↔ container`, accepted per the decision log
-  — see README). The fifth — the genuine `agents/helpers ↔ agents/repository`
-  cycle — was removed by the Wave-2 B14 fix (helpers imports the row types
-  from `db/rows.ts` instead of the repository) → **4, the accepted floor**.
+- `no-circular` — **5 cycles**: all five through the composition root — the
+  four repo-intel edges (`repo-intel/service|pipeline ↔ container`) plus
+  `project-context/service ↔ container` (added 2026-10-02 by the
+  plan-mandated lazy `container.projectContext` facade getter: the service
+  imports the `Container` type while the container imports the service — the
+  exact shape of the repo-intel edges, accepted per the decision log — see
+  README). The one genuine non-composition cycle (`agents/helpers ↔
+  agents/repository`) was removed by the Wave-2 B14 fix (helpers imports the
+  row types from `db/rows.ts` instead of the repository) and must not
+  return. Retirement for all five: the pending container-cycle policy below.
 
 ## What the gate cannot see
 
@@ -118,10 +125,12 @@ reason and a retirement plan.
 
 **warn (burn down, then promote)**: `no-circular` only. Fix the `agents`
 cycle first (Wave-2 B14: helpers imports row types from `db/rows.ts`),
-then set an explicit policy for the four container-root cycles before any
-promotion — they are ledgered as accepted at the composition root (README),
-so the likely end state is a scoped `pathNot` + a documented acceptance, not
-a chase to zero.
+then set an explicit policy for the five container-root cycles before any
+promotion — the four repo-intel edges plus `project-context/service ↔
+container` (same lazy-facade shape, ledgered with them in the baseline
+above) — they are accepted at the composition root (README), so the likely
+end state is a scoped `pathNot` + a documented acceptance covering all
+five, not a chase to zero.
 
 When code removes an exception or clears a warn backlog, tighten the config
 in the same change — a lenient setting that outlives its cause silently

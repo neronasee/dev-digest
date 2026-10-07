@@ -1,7 +1,8 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { resolve } from 'node:path';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -24,8 +25,14 @@ import {
   REFUND_TEST_PATCH,
   ROUTE_SIGNATURE_PATCH,
 } from './seed-diffs.js';
-import { wrapUntrusted } from '@devdigest/reviewer-core';
+import { SPEC_CITATION_NOTE, wrapUntrusted } from '@devdigest/reviewer-core';
 import { skillsForPrompt } from '../modules/skills/helpers.js';
+import {
+  API_LAYERING_SPEC,
+  DEMO_CLONE_PATH,
+  ensureContextFixture,
+} from './seed-context.js';
+import { DEMO_TOUR } from './seed-onboarding.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -114,6 +121,18 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       .returning();
   }
   const repoId = repo!.id;
+
+  // ---- Project Context fixture clone (R2) ----
+  // Write the seeded markdown documents under clones/acme/payments-api/ and
+  // point the demo repo at the clone (relative path — resolves against the
+  // API's server/ cwd, matching clonePathFor's default output). Idempotent:
+  // the fixture rewrites the same bytes; the repos row is only assigned while
+  // null so a dev DB that cloned the REAL repo keeps its absolute path.
+  await ensureContextFixture(resolve(process.cwd(), DEMO_CLONE_PATH));
+  await db
+    .update(t.repos)
+    .set({ clonePath: DEMO_CLONE_PATH })
+    .where(and(eq(t.repos.id, repoId), isNull(t.repos.clonePath)));
 
   // ---- PR #482 (rate limiting) ----
   let [pr] = await db
@@ -522,6 +541,22 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     });
   }
 
+  // ---- Onboarding Tour: one contract-valid demo tour ----
+  // Zero model calls: the seeded row is what the studio page, the client
+  // tests and the e2e flow read. Idempotent by absence — a re-seed never
+  // overwrites a tour the user generated for real.
+  const [existingTour] = await db
+    .select({ repoId: t.onboarding.repoId })
+    .from(t.onboarding)
+    .where(eq(t.onboarding.repoId, repoId));
+  if (!existingTour) {
+    await db.insert(t.onboarding).values({
+      repoId,
+      json: DEMO_TOUR,
+      generatedAt: new Date(),
+    });
+  }
+
   // ---- experiment PRs (#483, #484) — Skills control experiments ----
   // pr_files carry REAL patch hunks (PR #482's files don't — its diff is
   // empty), so the reviewer sees actual code and the grounding gate accepts
@@ -646,10 +681,19 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         .files.map((f) => `--- a/${f.path}\n+++ b/${f.path}\n${f.patch}`)
         .join('\n');
       const taskLine = `Review the changes in PR #483 "${pr483.title}".`;
+      // Project Context — the seeded demo trace mirrors a real run that had
+      // specs/api-layering.md attached: one `## Project context` block with
+      // the path-labeled untrusted wrapper, token attribution, specs_read, and
+      // its log line. The citation line IS reviewer-core's SPEC_CITATION_NOTE
+      // (imported — byte-identical by construction).
+      const specsBlock = wrapUntrusted('specs/api-layering.md', API_LAYERING_SPEC);
+      const specsTokens = Math.ceil(specsBlock.length / 4);
+      const specsRead = [{ path: 'specs/api-layering.md', tokens: Math.ceil(API_LAYERING_SPEC.length / 4) }];
       const user = [
         taskLine,
         `## PR description\n${wrapUntrusted('pr-description', pr483.body ?? '')}`,
         ...(bodies.length > 0 ? [`## Skills / rules\n${bodies.join('\n\n')}`] : []),
+        `## Project context\n${SPEC_CITATION_NOTE}\n\n${specsBlock}`,
         `## Diff to review\n${wrapUntrusted('diff', diffText)}`,
       ].join('\n\n');
       const [multiRun] = await db
@@ -700,13 +744,14 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
             skills: bodies.length > 0 ? bodies.join('\n\n') : null,
             ...(bodies.length > 0 ? { skills_tokens: tokens, skills_loaded: names } : {}),
             memory: null,
-            specs: null,
+            specs: specsBlock,
+            specs_tokens: specsTokens,
             user,
           },
           tool_calls: [],
           raw_output: '',
           memory_pulled: [],
-          specs_read: [],
+          specs_read: specsRead,
           log: [
             { t: '00.00', kind: 'info', msg: `Starting review with agent "Test Quality Reviewer" (seed/seed)` },
             ...(bodies.length > 0
@@ -718,7 +763,12 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
                   },
                 ]
               : []),
-            { t: '00.02', kind: 'info', msg: 'Run complete; trace persisted' },
+            {
+              t: '00.02',
+              kind: 'info' as const,
+              msg: `project context: ${specsRead.length} document(s) (~${specsRead[0]!.tokens} tokens)`,
+            },
+            { t: '00.03', kind: 'info', msg: 'Run complete; trace persisted' },
           ],
         },
       });

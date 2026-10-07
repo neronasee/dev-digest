@@ -1,0 +1,114 @@
+{
+  "name": "Agent editor Context tab: tick documents, save, reload restores checkmark and order",
+  "description": "Open the seeded API Contract Reviewer, switch to the Context tab, and exercise the per-(agent, repo) document attachment end to end: the discovered documents list (specs/api-layering.md among them) with the '0 of 3 attached' badge, then tick TWO documents in a chosen order (specs/api-layering.md first, then docs/architecture.md) and prove the persisted set survives a full reload — both checkboxes checked and the attached rows numbered 1 and 2 in the tick order. Every tick immediately PUTs the whole ordered set for the selected repo (the picker has no separate save button — whole-set replace, last save wins), so each tick is followed by an innerText assertion of the resulting badge and row order. The ticks are GUARDED wait --fn clicks on the checkbox inside the row matching a path (agent-browser find has no nth-match, and 'first checkbox' would be ambiguous once rows re-render attached-first). MUTATES seeded data (one agent's context attachment set) — needs the hermetic runner's fresh DB, like flow 14; a second run against the same stack would start from the persisted set and the 0-of-3 badge assertion would fail. Tab label and h2 are DOM-cased ('Context', 'Project context' — lowercase c, distinct from the sidebar's 'Project Context'); the badge is CSS-uppercased, so badge assertions use case-insensitive innerText regexes.",
+  "steps": [
+    {
+      "cmd": ["open", "{BASE}/agents"],
+      "label": "load the agents page"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "agents fetch settles"
+    },
+    {
+      "cmd": ["find", "text", "API Contract Reviewer", "click"],
+      "label": "open the seeded API Contract Reviewer"
+    },
+    {
+      "cmd": ["wait", "--url", "tab=config"],
+      "label": "editor route reached with Config active"
+    },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Context"],
+      "label": "switch to the Context tab"
+    },
+    {
+      "cmd": ["wait", "--url", "tab=context"],
+      "label": "Context tab active in the URL"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "documents + attachment fetches settle"
+    },
+    {
+      "cmd": ["wait", "--text", "Project context"],
+      "label": "the Context tab heading renders (DOM-cased, lowercase c)"
+    },
+    {
+      "cmd": ["wait", "--text", "specs/api-layering.md"],
+      "label": "the seeded documents are listed"
+    },
+    {
+      "cmd": ["wait", "--fn", "() => /0 of 3 attached/i.test(document.body.innerText)"],
+      "label": "nothing is attached yet (case-insensitive — Badge text is CSS-uppercased)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const cbs = Array.from(document.querySelectorAll('[role=\"checkbox\"]')); const cb = cbs.find((c) => { const row = c.closest('div'); return !!row && row.textContent.includes('specs/api-layering.md'); }); if (!cb) return false; if (cb.getAttribute('aria-checked') === 'true') return true; cb.click(); return false; }"
+      ],
+      "label": "tick specs/api-layering.md (guarded click on that row's checkbox — saves the whole ordered set immediately)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const cbs = Array.from(document.querySelectorAll('[role=\"checkbox\"]')); if (cbs.length === 0) return false; const first = cbs[0]; if (!first || first.getAttribute('aria-checked') !== 'true') return false; const row = first.closest('div'); return !!row && row.textContent.includes('specs/api-layering.md') && /1 of 3 attached/i.test(document.body.innerText); }"
+      ],
+      "label": "the row re-rendered attached-first, checked, and the badge counts 1 of 3"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const cbs = Array.from(document.querySelectorAll('[role=\"checkbox\"]')); const cb = cbs.find((c) => { const row = c.closest('div'); return !!row && row.textContent.includes('docs/architecture.md'); }); if (!cb) return false; if (cb.getAttribute('aria-checked') === 'true') return true; cb.click(); return false; }"
+      ],
+      "label": "tick docs/architecture.md second (it appends after api-layering in the saved order)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const cbs = Array.from(document.querySelectorAll('[role=\"checkbox\"]')); const rows = cbs.map((c) => c.closest('div')); const checked = cbs.map((c) => c.getAttribute('aria-checked') === 'true'); return cbs.length === 3 && checked[0] === true && checked[1] === true && !!rows[0] && !!rows[1] && rows[0].textContent.includes('specs/api-layering.md') && rows[1].textContent.includes('docs/architecture.md') && /2 of 3 attached/i.test(document.body.innerText); }"
+      ],
+      "label": "both rows sit attached-first in tick order (1. api-layering, 2. architecture), both checked, badge 2 of 3"
+    },
+    {
+      "cmd": ["open", "{BASE}/agents"],
+      "label": "reload — the attachment set must persist"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "agents fetch settles again"
+    },
+    {
+      "cmd": ["find", "text", "API Contract Reviewer", "click"],
+      "label": "reopen the seeded agent"
+    },
+    {
+      "cmd": ["wait", "--url", "tab=config"],
+      "label": "editor route reached after reload"
+    },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Context"],
+      "label": "switch back to the Context tab"
+    },
+    {
+      "cmd": ["wait", "--url", "tab=context"],
+      "label": "Context tab active in the URL again"
+    },
+    {
+      "cmd": ["wait", "--load", "networkidle"],
+      "label": "documents + attachment fetches settle"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--fn",
+        "() => { const cbs = Array.from(document.querySelectorAll('[role=\"checkbox\"]')); const rows = cbs.map((c) => c.closest('div')); const checked = cbs.map((c) => c.getAttribute('aria-checked') === 'true'); return cbs.length === 3 && checked[0] === true && checked[1] === true && !!rows[0] && !!rows[1] && rows[0].textContent.includes('specs/api-layering.md') && rows[1].textContent.includes('docs/architecture.md') && /2 of 3 attached/i.test(document.body.innerText); }"
+      ],
+      "label": "the reload RESTORED both checkmarks AND the order — api-layering first, architecture second, badge 2 of 3"
+    }
+  ]
+}

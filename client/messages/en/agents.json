@@ -48,7 +48,8 @@
       "skills": "Skills",
       "evals": "Evals",
       "stats": "Stats",
-      "ci": "CI"
+      "ci": "CI",
+      "context": "Context"
     }
   },
   "config": {
@@ -93,6 +94,10 @@
     "filterPlaceholder": "Filter skills…",
     "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach.",
     "dragHandle": "Drag to reorder"
+  },
+  "context": {
+    "title": "Project context",
+    "hint": "Pick the repository documents this agent reviews against, per repo. Every change saves the whole ordered set for that repo (last save wins)."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

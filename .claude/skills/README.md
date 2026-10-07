@@ -21,6 +21,8 @@ Reusable AI skills that provide specialized knowledge and workflows. Canonical l
 | [engineering-insights](engineering-insights/SKILL.md) | Shared | Read module INSIGHTS.md before work; append non-obvious learnings after substantial sessions |
 | [curate-insights](curate-insights/SKILL.md) | Meta | User-invoked (`/curate-insights`, model-invocation disabled): periodic INSIGHTS.md gardening via the insights-curator agent |
 | [pr-self-review](pr-self-review/SKILL.md) | Meta | Pre-PR gate: maps skills to all open changes vs origin/main, runs per-package mechanical checks, BLOCKs on any CRITICAL finding |
+| [implement-plan](implement-plan/SKILL.md) | Meta | SDD execution pipeline: implementer (single or module-batched) → plan-verifier (gate) → architecture-reviewer (bounded fix loop) for an approved `docs/plans/*.md`; spec-creator / implementation-planner / test-writer run separately |
+| [workflow-retro](workflow-retro/SKILL.md) | Meta | User-invoked (`/workflow-retro`, model invocation disabled): orchestration retrospective — tokens, dispatch order, handoff signals, targeted recommendations → `docs/retro/ledger/` |
 
 ## What Are Skills?
 

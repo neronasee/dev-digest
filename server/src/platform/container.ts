@@ -35,6 +35,7 @@ import { SettingsRepository } from '../modules/settings/repository.js';
 import { PullsRepository } from '../modules/pulls/repository.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
+import { ProjectContextService } from '../modules/project-context/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
 import { type Tokenizer, TiktokenTokenizer } from '../adapters/tokenizer/index.js';
 
@@ -196,6 +197,7 @@ export class Container {
   private _workspaceRepo?: WorkspaceRepository;
   private _settingsRepo?: SettingsRepository;
   private _pullsRepo?: PullsRepository;
+  private _projectContext?: ProjectContextService;
 
   get pollingRepo(): PollingRepository {
     return (this._pollingRepo ??= new PollingRepository(this.db));
@@ -213,6 +215,16 @@ export class Container {
    *  module's service consumes it (B1). */
   get pullsRepo(): PullsRepository {
     return (this._pullsRepo ??= new PullsRepository(this.db));
+  }
+
+  /**
+   * Project Context facade: repo-document discovery from the clone,
+   * per-(owner, repo) attachments (persisted via agentsRepo/skillsRepo), and
+   * run-time prompt-block composition. Consumed by the module's routes and the
+   * reviews run-executor (fail-open enrichment).
+   */
+  get projectContext(): ProjectContextService {
+    return (this._projectContext ??= new ProjectContextService(this));
   }
 
   async github(): Promise<GitHubClient> {

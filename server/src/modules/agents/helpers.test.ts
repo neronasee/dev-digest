@@ -39,7 +39,8 @@ describe('toAgentVersionDto', () => {
     expect(dto).toEqual({
       agent_id: '0b9e6b35-0000-4000-8000-000000000001',
       version: 1,
-      config: VALID_CONFIG,
+      // the schema's .default([]) backfills context_docs onto legacy snapshots
+      config: { ...VALID_CONFIG, context_docs: [] },
       created_at: '2026-09-20T00:00:00.000Z',
     });
   });

@@ -21,12 +21,13 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-10-03 — Hardening only wrapUntrusted's CONTENT leaves the LABEL as the live injection surface: a SpecEntry path comes from the reviewed repo's clone, so a filename containing `</untrusted>`, `"`, or CR/LF could close the region early, break out of `source="…"`, or inject lines into the opening tag — the wrapper is the single defense point, so every interpolated field gets the same rigor (close-delimiter escaped exactly like content, quote + CR/LF entity-encoded), and deliberately NO discovery-time path charset allowlist (it would reject legitimate non-ASCII document names). (src/prompt.ts:41)
 
 ## Codebase Patterns
 
 <!-- newest on top -->
 
+- 2026-10-02 — A prompt-slot type change must be widened in TWO independent declarations — `PromptParts` (src/prompt.ts) and `ReviewInput` (src/review/run.ts), which re-declares the field as plain `string[]` and feeds it to `assemblePrompt` — widening only `PromptParts` typechecks green while leaving `reviewPullRequest` unable to accept the new entry shape. (src/prompt.ts, src/review/run.ts:64)
 - 2026-09-20 — The `UnifiedDiff` zod gate lives ONLY at `reviewPullRequest` entry (src/review/run.ts); `groundFindings`/`sliceDiff` stay defensive (optional-chain guards) because they are exported and callable directly, bypassing the gate. The vendored schemas (vendor/shared/adapters.ts) must stay at least as permissive as the server's `parseUnifiedDiff`: deleted-file hunks emit `@@ -1,N +0,0 @@` → `newStart`/`newLines` **0** and an EMPTY `newLineNumbers` — tightening to ≥1 or non-empty would fail live runs; a run.test.ts fixture pins this.
 - 2026-09-20 — `DiffHunk` carries ranges and line numbers, NOT text — any hunk-based reconstruction (e.g. the sliceDiff fallback) can only emit `+ [line N]` placeholders; the raw diff slice is the sole source of line text, so the fallback can never be "improved" into real content without changing the vendored contract. (src/review/reduce.ts)
 

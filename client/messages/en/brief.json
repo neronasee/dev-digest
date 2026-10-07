@@ -15,5 +15,33 @@
     "blame": "blame",
     "noHistory": "No history available for this line.",
     "noCommits": "No commits found for this line."
-  }
+  },
+  "title": "PR Brief",
+  "generate": "Generate brief",
+  "refresh": "Refresh",
+  "generating": "Generating…",
+  "stale": "This brief was generated for an earlier commit — refresh it to match the current head.",
+  "error": "Couldn't generate the brief.",
+  "retry": "Retry",
+  "summaryLabel": "Summary",
+  "risksLabel": "Risk areas",
+  "focusLabel": "Review focus",
+  "noReviewFocus": "No review-focus items — start with the Risk areas above.",
+  "missing": {
+    "intent": "intent",
+    "blast": "blast radius",
+    "description": "PR description",
+    "linked_issue": "linked issue",
+    "attached_specs": "attached specs"
+  },
+  "missingPrefix": "Generated without: {items}",
+  "notInDiff": "not in this PR's diff",
+  "severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "generatedAge": "Generated {age} ago",
+  "emptyTitle": "No brief yet",
+  "emptyBody": "Generate a one-card brief — what this PR does, what is risky, and where to start reading."
 }

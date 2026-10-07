@@ -69,6 +69,15 @@ export function PrDetailView() {
   };
   const setTab = (t: string) => setParam("tab", t);
 
+  // PR Brief deep-link seam: a Review-focus click stores the file:line target
+  // and switches to the Files changed tab; DiffTab forwards it down to the
+  // matching FileCard (which opens and scrolls to the line).
+  const [diffFocus, setDiffFocus] = React.useState<{ path: string; line: number } | null>(null);
+  const onFocusBriefItem = (file: string, line: number) => {
+    setDiffFocus({ path: file, line });
+    setTab("diff");
+  };
+
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
   const allFindings: FindingRecord[] = React.useMemo(
@@ -142,6 +151,9 @@ export function PrDetailView() {
             repoId={repoId}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            prFilePaths={pr.files.map((f) => f.path)}
+            latestReview={runs[0] ?? null}
+            onFocusBriefItem={onFocusBriefItem}
           />
         )}
 
@@ -179,6 +191,7 @@ export function PrDetailView() {
             filesCount={pr.files_count}
             files={pr.files}
             canComment={pr.status === "open"}
+            focus={diffFocus}
           />
         )}
       </div>

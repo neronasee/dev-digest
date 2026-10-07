@@ -43,6 +43,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-04 — A test render-helper whose `messages` param defaults to one namespace but accepts extra ones must type it as `AbstractIntlMessages` (exported by next-intl) — `Record<string, unknown>` passes vitest but fails `pnpm typecheck` with a string-index incompatibility on `NextIntlClientProvider`. (pulls/[number]/_components/PrBriefCard/PrBriefCard.test.tsx renderCard)
+
 - 2026-10-03 — `userEvent.setup()` INSTALLS ITS OWN `navigator.clipboard` stub (re-defines the own property), silently bypassing a clipboard stub installed earlier via `Object.defineProperty(navigator, "clipboard", …)` — the component's `writeText` resolves against user-event's mock (UI even shows "Copied") while your spy records zero calls; create the user FIRST, then install the stub. (src/app/repos/[repoId]/onboarding-tour/page.test.tsx AC-18)
 - 2026-10-03 — The vendored `Markdown` primitive (react-markdown, no rehype-raw) renders embedded raw HTML like `<script>alert(1)</script>` as ESCAPED VISIBLE TEXT — each entity becomes its own text node inside one `<p>`, so "renders as visible text, never as elements" (AC-21-style) is literally assertable via `getByText` on the full paragraph string plus `querySelector("script")` being null. (src/app/repos/[repoId]/onboarding-tour/page.test.tsx)
 - 2026-10-03 — Testing a surface that follows the global repo selector means rendering the REAL RepoProvider, which drags in two mocks (`next/navigation`'s usePathname, and `useRepos` — mockable via either `@/lib/hooks` or `@/lib/hooks/core`; the barrel re-exports the mocked core, verified both ways) — and `setRepoId` persists `dd-repo` to jsdom localStorage SHARED by every test in the file, so a test that switches repos leaks the selection into later tests unless beforeEach/afterEach clear it. (src/components/project-context/ProjectContextPicker.test.tsx)
@@ -62,6 +64,9 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-04 — Resolving a deferred fetch gate with the response BODY instead of a `res(...)`-wrapped Response silently converts a success into an ApiError (`res.ok` undefined → falsy branch, json() throws → caught), so a mutation write-through test fails as "card never left the none-state" with the trigger re-enabled and no visible error — wrap every `gate.resolve(...)` payload in the same `res()` helper the stub uses. (pulls/[number]/_components/PrBriefCard/PrBriefCard.test.tsx AC-2)
+- 2026-10-04 — DiffTab renders the PLAIN DiffViewer (all files, GitHub order) while smart-diff loads, so a deep-link test's `findByText(<file path>)` resolves against the wrong viewer and later "stays collapsed" assertions fail — await a role-group header (e.g. "Docs") before asserting group bodies. (pulls/[number]/_components/SmartDiffView/SmartDiffView.test.tsx focus case)
+
 - 2026-10-03 — `expect(await findByText(x)).toBeInTheDocument()` failing with "element could not be found in the document" (the DETACHED-element message, NOT the timeout one) means the page mounts TWO queries resolving back-to-back — the tour data renders path rows as `<span>`, then RepoProvider's `/repos` resolve re-renders them as `<a>`, and findBy latches the transient node before the swap; await a settled-state anchor (`findByRole("link", …)`) before asserting anything else. Section titles that render twice (card `<h2>` + TOC button) need role-scoped queries, not `getByText`. (src/app/repos/[repoId]/onboarding-tour/page.test.tsx)
 - 2026-10-02 — "Found multiple elements with the text: Project context" in a tab test was a SHARED component rendering its own `<h2>` under a host that already titles the section — shared components destined for editor tabs/sections must leave the section heading to the host (ProjectContextPicker carries only repo switch + badge in its header). (src/components/project-context/ProjectContextPicker.tsx, AgentEditor/_components/ContextTab)
 - 2026-09-29 — When one component owns TWO queries (BlastRadiusCard mounting PrHistorySection added `/pulls/:id/history` next to `/blast`), a per-test fetch stub that throws on unknown URLs fails EVERY case with `[test] unexpected fetch …/history` the moment the second hook mounts — the stub must serve every URL the mounted tree can fetch, even in cases asserting nothing about that data. (src/app/repos/[repoId]/pulls/[number]/_components/BlastRadiusCard/BlastRadiusCard.test.tsx stubBlastFetch)
@@ -75,7 +80,8 @@ Contract:
 
 <!-- newest on top -->
 
-- _none yet_
+- 2026-10-04 — This machine has a partial lookalike repo copy at `~/playground/neoversity/dev-digest` (vs the real `neoversity`) — one letter apart and invisible in most tool output; a Write whose prefix uses the wrong one lands in the foreign tree and typecheck/test still pass because they ran in the real one. After creating the first file deep in a tree, confirm it exists in the intended root (`ls` the new path) before continuing.
+
 
 ## Open Questions
 

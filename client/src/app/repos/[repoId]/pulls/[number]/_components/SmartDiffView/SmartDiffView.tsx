@@ -24,6 +24,7 @@ export function SmartDiffView({
   reviewsExist,
   pendingFindingId,
   onFindingAction,
+  focus,
 }: {
   /** The PR's files in GitHub order (path join target for the groups). */
   files: PrFile[];
@@ -36,6 +37,9 @@ export function SmartDiffView({
   reviewsExist: boolean;
   pendingFindingId?: string | null;
   onFindingAction?: (action: FindingActionKind, findingId: string) => void;
+  /** Brief deep-link target — opens the target's (collapsed) group; null
+      changes nothing (collapse defaults stay untouched). */
+  focus?: { path: string; line: number } | null;
 }) {
   const t = useTranslations("prReview.smartDiff");
 
@@ -74,6 +78,15 @@ export function SmartDiffView({
       return next;
     });
 
+  // A brief deep-link into a COLLAPSED group (docs/boilerplate) opens that
+  // group — the target file must be visible (AC-6). Null focus is a no-op, so
+  // collapse defaults are unchanged for every other consumer.
+  React.useEffect(() => {
+    if (!focus) return;
+    const role = groups.find((g) => g.files.some((f) => f.path === focus.path))?.role;
+    if (role) setCollapsed((prev) => (prev.has(role) ? new Set([...prev].filter((r) => r !== role)) : prev));
+  }, [focus, groups]);
+
   // Degenerate cache mismatch (files exist, no groups served): fall back to
   // the plain viewer instead of rendering nothing.
   if (groups.length === 0) {
@@ -84,6 +97,7 @@ export function SmartDiffView({
         findings={findings}
         onFindingAction={onFindingAction}
         pendingFindingId={pendingFindingId}
+        focus={focus}
       />
     );
   }
@@ -121,6 +135,7 @@ export function SmartDiffView({
                   findings={findings}
                   onFindingAction={onFindingAction}
                   pendingFindingId={pendingFindingId}
+                  focus={focus}
                 />
               </div>
             )}

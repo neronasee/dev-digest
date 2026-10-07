@@ -20,6 +20,7 @@ export function DiffViewer({
   findings,
   onFindingAction,
   pendingFindingId,
+  focus,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -29,6 +30,9 @@ export function DiffViewer({
   onFindingAction?: (action: FindingActionKind, findingId: string) => void;
   /** The finding an action is currently in flight for (buttons disabled). */
   pendingFindingId?: string | null;
+  /** Brief deep-link target — forwarded ONLY to the matching file's card, so
+      every other FileCard sees null and keeps its default behavior. */
+  focus?: { path: string; line: number } | null;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -44,6 +48,7 @@ export function DiffViewer({
           findings={findings?.filter((x) => x.file === f.path)}
           onFindingAction={onFindingAction}
           pendingFindingId={pendingFindingId}
+          focus={focus != null && focus.path === f.path ? focus : null}
         />
       ))}
     </div>

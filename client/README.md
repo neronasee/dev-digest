@@ -35,7 +35,7 @@ flowchart TD
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/smart-diff<br/>GET /pulls/:id/blast · /pulls/:id/history · GET/POST /pulls/:id/intent · PUT /pulls/:id/intent/feedback<br/>POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
+  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/smart-diff<br/>GET /pulls/:id/blast · /pulls/:id/history · GET/POST /pulls/:id/intent · PUT /pulls/:id/intent/feedback<br/>GET/POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
   AGENTS -->|"/agents · /agents/:id · /agents/:id/skills<br/>useAgentContextSet/useSetAgentContext → GET|PUT /agents/:id/context"| API
   SKILLS -->|"GET/POST /skills · GET/PUT/DELETE /skills/:id<br/>GET /skills/:id/versions · useImportSkillFromUrl → POST /skills/import-url<br/>useSkillContextSet/useSetSkillContext → GET|PUT /skills/:id/context"| API
   CONV -->|"GET /repos/:id/conventions · POST …/extract · POST …/skill<br/>PATCH/DELETE /conventions/:id · POST /agents/:id/skills (link)"| API
@@ -51,6 +51,16 @@ editor's Context tab and the skill editor's "Project context to use" section
 are the same shared `src/components/project-context/ProjectContextPicker`
 (document discovery + ordered attachment per repo, via
 `src/lib/hooks/project-context.ts`).
+
+The PR-detail Overview tab leads with the **PR Brief card**
+(`_components/PrBriefCard/`, data via `usePrBrief`/`useGenerateBrief` from
+`src/lib/hooks/brief.ts` — `GET /pulls/:id/brief` serves the cached brief,
+`POST` runs the single model call and seeds the read cache). Its **Review
+focus** rows deep-link into the Files changed tab at the referenced
+`file:line`: the optional `focus` prop chain
+`PrDetailView → DiffTab → (SmartDiffView) → DiffViewer → FileCard` opens the
+target file (and its collapsed role group) and scrolls to the closest
+rendered line — `focus: null` (every other consumer) changes nothing.
 
 ## Testing
 

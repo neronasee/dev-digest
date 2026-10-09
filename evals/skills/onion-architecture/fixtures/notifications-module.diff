@@ -1,0 +1,219 @@
+diff --git a/server/src/modules/index.ts b/server/src/modules/index.ts
+index 8f1c2ad..d4b7e90 100644
+--- a/server/src/modules/index.ts
++++ b/server/src/modules/index.ts
+@@ -13,6 +13,7 @@ import repoIntel from './repo-intel/routes.js';
+ import blast from './blast/routes.js';
+ import projectContext from './project-context/routes.js';
+ import onboarding from './onboarding/routes.js';
+ import brief from './brief/routes.js';
++import notifications from './notifications/routes.js';
+
+ /**
+@@ -41,5 +42,6 @@ export const modules: Record<string, FastifyPluginAsync> = {
+   blast,
+   projectContext,
+   onboarding,
+   brief,
++  notifications,
+ };
+diff --git a/server/src/modules/notifications/constants.ts b/server/src/modules/notifications/constants.ts
+new file mode 100644
+index 0000000..3a9f1c2
+--- /dev/null
++++ b/server/src/modules/notifications/constants.ts
+@@ -0,0 +1,8 @@
++/** Shared literals for the notifications module. */
++export const MAX_BODY_TOKENS = 380;
++
++/** How many entries the feed endpoint returns. */
++export const RECENT_LIMIT = 20;
+diff --git a/server/src/modules/notifications/helpers.ts b/server/src/modules/notifications/helpers.ts
+new file mode 100644
+index 0000000..b7e2401
+--- /dev/null
++++ b/server/src/modules/notifications/helpers.ts
+@@ -0,0 +1,42 @@
++import type { NotificationRow } from './repository.js';
++import type { Notification } from './routes.js';
++
++/** Everything needed to render one feed entry. */
++export interface MessageInput {
++  kind: 'review-completed' | 'review-failed';
++  repoFullName: string;
++  prNumber: number;
++  title: string;
++}
++
++/** Render the single-line body shown in the notifications feed. */
++export function renderBody(input: MessageInput): string {
++  const mark = input.kind === 'review-completed' ? 'done' : 'failed';
++  return `${mark} ${input.repoFullName}#${input.prNumber} ${input.title}`;
++}
++
++/** Trim a body on a word boundary so feed entries stay single-line. */
++export function truncateBody(body: string, maxChars = 160): string {
++  if (body.length <= maxChars) return body;
++  const cut = body.slice(0, maxChars);
++  const lastSpace = cut.lastIndexOf(' ');
++  return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}…`;
++}
++
++/** Map a stored row onto the API response shape. */
++export function toNotificationDto(row: NotificationRow): Notification {
++  return {
++    id: row.id,
++    kind: row.kind,
++    body: row.body,
++    createdAt: row.createdAt.toISOString(),
++  };
++}
+diff --git a/server/src/modules/notifications/repository.ts b/server/src/modules/notifications/repository.ts
+new file mode 100644
+index 0000000..c1d804e
+--- /dev/null
++++ b/server/src/modules/notifications/repository.ts
+@@ -0,0 +1,38 @@
++import { desc, eq } from 'drizzle-orm';
++import type { Db } from '../../db/client.js';
++import { notifications } from '../../db/schema.js';
++
++/**
++ * Notifications data access. The only file that queries the `notifications`
++ * table; every query is scoped by workspaceId (tenancy guard).
++ */
++export interface NotificationRow {
++  id: string;
++  workspaceId: string;
++  kind: 'review-completed' | 'review-failed';
++  body: string;
++  createdAt: Date;
++}
++
++export interface InsertNotification {
++  workspaceId: string;
++  kind: NotificationRow['kind'];
++  body: string;
++}
++
++export class NotificationRepository {
++  constructor(private db: Db) {}
++
++  async insert(values: InsertNotification): Promise<NotificationRow> {
++    const [row] = await this.db.insert(notifications).values(values).returning();
++    return row!;
++  }
++
++  async listRecent(workspaceId: string, limit: number): Promise<NotificationRow[]> {
++    return this.db
++      .select()
++      .from(notifications)
++      .where(eq(notifications.workspaceId, workspaceId))
++      .orderBy(desc(notifications.createdAt))
++      .limit(limit);
++  }
++}
+diff --git a/server/src/modules/notifications/routes.ts b/server/src/modules/notifications/routes.ts
+new file mode 100644
+index 0000000..e52a9b7
+--- /dev/null
++++ b/server/src/modules/notifications/routes.ts
+@@ -0,0 +1,62 @@
++import type { FastifyInstance } from 'fastify';
++import type { ZodTypeProvider } from 'fastify-type-provider-zod';
++import { z } from 'zod';
++import { desc, eq } from 'drizzle-orm';
++import { notifications } from '../../db/schema.js';
++import { getContext } from '../_shared/context.js';
++import { NotificationService } from './service.js';
++import { toNotificationDto } from './helpers.js';
++import { RECENT_LIMIT } from './constants.js';
++
++/** Wire contract for one feed entry (no shared contract exists yet). */
++const Notification = z.object({
++  id: z.string(),
++  kind: z.enum(['review-completed', 'review-failed']),
++  body: z.string(),
++  createdAt: z.string(),
++});
++export type Notification = z.infer<typeof Notification>;
++
++const NotificationInput = z.object({
++  kind: z.enum(['review-completed', 'review-failed']),
++  repoFullName: z.string().min(3),
++  prNumber: z.number().int().positive(),
++  title: z.string().min(1).max(280),
++});
++
++/**
++ * Notifications module. Parses requests, maps status codes, and delegates
++ * the rest to NotificationService.
++ *   POST /notifications  → record a review outcome for the workspace feed
++ *   GET  /notifications  → the most recent feed entries
++ */
++export default async function notificationRoutes(appBase: FastifyInstance) {
++  const app = appBase.withTypeProvider<ZodTypeProvider>();
++  const service = new NotificationService(app.container);
++
++  app.post(
++    '/notifications',
++    { schema: { body: NotificationInput, response: { 201: Notification } } },
++    async (req, reply) => {
++      const { workspaceId } = await getContext(app.container, req);
++      const row = await service.notify(workspaceId, req.body);
++      reply.status(201);
++      return toNotificationDto(row);
++    },
++  );
++
++  app.get(
++    '/notifications',
++    { schema: { response: { 200: z.array(Notification) } } },
++    async (req) => {
++      const { workspaceId } = await getContext(app.container, req);
++      const rows = await app.container.db
++        .select()
++        .from(notifications)
++        .where(eq(notifications.workspaceId, workspaceId))
++        .orderBy(desc(notifications.createdAt))
++        .limit(RECENT_LIMIT);
++      return rows.map(toNotificationDto);
++    },
++  );
++}
+diff --git a/server/src/modules/notifications/service.ts b/server/src/modules/notifications/service.ts
+new file mode 100644
+index 0000000..9a03d5f
+--- /dev/null
++++ b/server/src/modules/notifications/service.ts
+@@ -0,0 +1,33 @@
++import type { Container } from '../../platform/container.js';
++import { TiktokenTokenizer } from '../../adapters/tokenizer/index.js';
++import { NotificationRepository, type NotificationRow } from './repository.js';
++import { renderBody, truncateBody, type MessageInput } from './helpers.js';
++import { MAX_BODY_TOKENS, RECENT_LIMIT } from './constants.js';
++
++/**
++ * Notifications service. Turns a finished review into a feed entry: renders
++ * the body, keeps it inside the token budget, and persists it.
++ */
++export class NotificationService {
++  private repo: NotificationRepository;
++  private tokenizer = new TiktokenTokenizer();
++
++  constructor(container: Container) {
++    this.repo = new NotificationRepository(container.db);
++  }
++
++  async notify(workspaceId: string, input: MessageInput): Promise<NotificationRow> {
++    let body = renderBody(input);
++    if (this.tokenizer.count(body) > MAX_BODY_TOKENS) {
++      body = truncateBody(body);
++    }
++    return this.repo.insert({ workspaceId, kind: input.kind, body });
++  }
++
++  async list(workspaceId: string): Promise<NotificationRow[]> {
++    return this.repo.listRecent(workspaceId, RECENT_LIMIT);
++  }
++}

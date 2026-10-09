@@ -106,15 +106,16 @@ export const cases: AgentCase[] = [
     name: "stays scoped to structure — no fabricated or out-of-scope findings",
     kind: "quality",
     prompt: auditPrompt(fx("checkout-service.diff")),
-    threshold: 0.8, // n=2: the floor still requires both practices — fabrication discipline is binary
+    threshold: 0.8, // n=2: fabrication discipline is binary
     maxTurns: 25,
     practices: [
       // CONTROL — the charter scope ("checks structural boundaries"; "NOT for … security review …
       // general correctness review") restated in both artifacts' "What you review" sentence.
       "does not fabricate a runtime, correctness, or security finding out of the optional `reply?: FastifyReply` parameter beyond the inward-dependency import violation itself — no invented bug, error-handling, or vulnerability finding presented as a structural-contract violation",
-      // CONTROL — Guardrail "Calibrate against over-flagging — boundary and correctness gaps, not
-      // style preferences". Identical in both artifacts.
-      "stays scoped to structural findings — it does not comment on naming, code style, or test coverage",
+      // Dropped 2026-10-09 (CP3 A/B evidence): "stays scoped to structural findings — it does not
+      // comment on naming, code style, or test coverage" failed 0/2 in BOTH arms. The charter also
+      // checks "the repo's golden rules", whose naming conventions legitimately elicit naming
+      // commentary — the practice asserted a prescription neither artifact makes.
     ],
   },
   {

@@ -1,6 +1,17 @@
 ---
 name: pr-self-review
-description: Pre-PR review gate over ALL local open changes vs origin/main (uncommitted + staged + unpushed commits — exactly what would land in the PR). Use whenever about to open a PR, push a branch, or when asked to review/bless/check local changes before a PR; invoke manually as /pr-self-review. Maps the diff onto this repo's .claude/skills/ lenses (UI skills on client/ files, backend-architecture skills on server/ + reviewer-core/ files), runs per-package mechanical checks (typecheck, unit tests, depcruise, vendor sync), guards repo invariants (applied migrations, lockfiles, vendored contracts, secrets, INJECTION_GUARD), and emits a findings report with a deterministic verdict — any CRITICAL finding means BLOCK: do not open or merge the PR, fix and re-run. NOT for reviewing an already-open PR or a PR number/branch target (use /code-review), a repo-wide security audit (/security-review), mid-task micro-reviews of one file, or posting reviews to GitHub.
+description: >-
+  Pre-PR review gate over ALL local open changes vs origin/main (uncommitted + staged + unpushed
+  commits — exactly what would land in the PR). Use whenever about to open a PR, push a branch,
+  or when asked to review/bless/check local changes before a PR; invoke manually as
+  /pr-self-review. Maps the diff onto this repo's .claude/skills/ lenses (UI skills on client/
+  files, backend-architecture skills on server/ + reviewer-core/ files), runs per-package
+  mechanical checks (typecheck, unit tests, depcruise, vendor sync), guards repo invariants
+  (applied migrations, lockfiles, vendored contracts, secrets, INJECTION_GUARD), and emits a
+  findings report with a deterministic verdict — any CRITICAL finding means BLOCK: do not open
+  or merge the PR, fix and re-run. NOT for reviewing an already-open PR or a PR number/branch
+  target (use /code-review), a repo-wide security audit (/security-review), mid-task
+  micro-reviews of one file, or posting reviews to GitHub.
 version: 1.0.0
 ---
 

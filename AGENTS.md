@@ -37,6 +37,16 @@ sync when contracts change.
 | `reviewer-core/` | `npm test`                                 | `npm run typecheck` | — |
 | `e2e/`     | `npm test` (needs `./scripts/e2e.sh` stack)      | `npm run typecheck` | — |
 | `mcp/`     | `npm test` (vitest, hermetic — API is a route stub) | `npm run typecheck` | — |
+| `evals/`   | `pnpm eval:quality` (static SKILL.md gate, no model); `eval:skills` / `eval:agents` / `eval:workflow` are live model runs on the subscription (minutes per case — see [`evals/README.md`](evals/README.md)) | `pnpm typecheck` | — |
+
+### Eval routing (harness change → minimum eval check)
+
+| Changed                              | Minimum check (run in `evals/`)                                        |
+|--------------------------------------|------------------------------------------------------------------------|
+| `.claude/skills/<name>/**`           | `pnpm eval:quality` + the skill's tier: `pnpm eval:repeat skills/<name> -n 2 --label <l>` |
+| `.claude/agents/<name>.md`           | `pnpm eval:repeat agents/<name> -n 2 --label <l>` + the workflow case that dispatches it |
+| `AGENTS.md` routing / harness wiring | `pnpm eval:workflow` — clean git tree before/after: it runs `bypassPermissions` on the live repo |
+| eval case / grader                   | recalibrate: `eval:repeat` baseline label → edit → candidate label → `eval:delta` (same eval file only) |
 
 ### Do not touch
 
@@ -100,6 +110,9 @@ sync when contracts change.
   (route map, hooks ↔ API surface).
 - Writing or debugging browser flows → read [`e2e/README.md`](e2e/README.md)
   (flow format, hermetic runner).
+- Changing the Claude Code harness (skills, subagents, AGENTS.md routing) or
+  writing eval cases → read [`evals/README.md`](evals/README.md) (tiers, the
+  grounding gate, trace assertions, the repeat/delta loop).
 - Starting work in a module → read that module's `INSIGHTS.md` first — always
   before a task, especially when debugging something non-obvious.
 - Designing or changing a feature → check for an existing behavior spec first:

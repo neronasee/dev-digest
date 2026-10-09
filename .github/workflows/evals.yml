@@ -10,7 +10,7 @@
 #       - OPENROUTER_API_KEY is configured, and
 #       - the event is not a fork PR (secrets never reach fork code).
 #
-# Budget invariants: only touched suites run (never eval:everything), n=2 trials, cheap
+# Budget invariants: only touched suites run (never eval:everything), n=1 trial (advisory smoke — calibration experiments stay local with n≥2), cheap
 # models (skills tier), per-job timeouts, and per-ref concurrency cancellation — a superseded
 # push cancels its in-flight runs instead of stacking billed sessions.
 #
@@ -43,7 +43,7 @@ on:
         default: 'deepseek/deepseek-chat'
       tool_model:
         description: 'OpenRouter slug for the agents + workflow (tool) tiers'
-        default: 'anthropic/claude-haiku-4.5'
+        default: 'google/gemini-2.5-flash'
 
 permissions:
   contents: read
@@ -163,7 +163,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: evals/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm eval:repeat "skills/${{ matrix.skill }}" -n 2 --label "${RUN_LABEL}-skills-${{ matrix.skill }}"
+      - run: pnpm eval:repeat "skills/${{ matrix.skill }}" -n 1 --label "${RUN_LABEL}-skills-${{ matrix.skill }}"
       - name: report
         if: always()
         run: |
@@ -181,7 +181,8 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # ── 4. Agents — tool tier; Anthropic slugs need the LiteLLM proxy. ADVISORY ──
+  # ── 4. Agents — tool tier via the LiteLLM translating proxy (the Agent SDK speaks the ──
+  #     Anthropic wire format, so non-Anthropic models MUST go through it). ADVISORY
   agents:
     needs: changes
     if: >-
@@ -202,8 +203,8 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_BASE_URL: http://localhost:4000
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      EVAL_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
-      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_MODEL: ${{ inputs.tool_model || 'google/gemini-2.5-flash' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'google/gemini-2.5-flash' }}
       RUN_LABEL: ${{ github.event_name == 'push' && 'ci-baseline' || format('ci-{0}', needs.changes.outputs.short_sha) }}
     steps:
       - uses: actions/checkout@v4
@@ -217,7 +218,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: docker compose -f proxy/docker-compose.yml up -d
       - run: pnpm proxy:wait
-      - run: pnpm eval:repeat "agents/${{ matrix.agent }}" -n 2 --label "${RUN_LABEL}-agents-${{ matrix.agent }}" --no-file-parallelism
+      - run: pnpm eval:repeat "agents/${{ matrix.agent }}" -n 1 --label "${RUN_LABEL}-agents-${{ matrix.agent }}" --no-file-parallelism
       - if: failure()
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()
@@ -256,8 +257,8 @@ jobs:
       EVAL_BACKEND: openrouter
       OPENROUTER_BASE_URL: http://localhost:4000
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      EVAL_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
-      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_MODEL: ${{ inputs.tool_model || 'google/gemini-2.5-flash' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'google/gemini-2.5-flash' }}
       RUN_LABEL: ${{ github.event_name == 'push' && 'ci-baseline' || format('ci-{0}', needs.changes.outputs.short_sha) }}
     steps:
       - uses: actions/checkout@v4
@@ -272,7 +273,7 @@ jobs:
       - run: docker compose -f proxy/docker-compose.yml up -d
       - run: pnpm proxy:wait
       # CI owns a disposable checkout, so the workflow tier's live-repo writes are harmless here.
-      - run: pnpm eval:repeat workflow -n 2 --label "${RUN_LABEL}-workflow" --no-file-parallelism
+      - run: pnpm eval:repeat workflow -n 1 --label "${RUN_LABEL}-workflow" --no-file-parallelism
       - if: failure()
         run: docker compose -f proxy/docker-compose.yml logs --tail 100
       - if: always()

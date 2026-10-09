@@ -109,14 +109,6 @@ jobs:
         id: sha
         run: echo "short_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
 
-      # TEMP DEBUG (remove after diagnosing the skip): context values, no secrets.
-      - name: debug skip conditions
-        run: |
-          echo "event_name=${{ github.event_name }}"
-          echo "fork=${{ github.event.pull_request.head.repo.fork }}"
-          echo "has_key_output=${{ steps.key.outputs.has_key }}"
-          echo "skills_output=${{ steps.detect.outputs.skills }}"
-
   # ── 2. Quality — the BLOCKING gate. No model, no secrets; runs on fork PRs too ──
   quality:
     needs: changes
@@ -143,7 +135,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.has_key == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.skills != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -194,7 +186,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.has_key == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.agents != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -252,7 +244,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.has_key == 'true' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.run_workflow == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45

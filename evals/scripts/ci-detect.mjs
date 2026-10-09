@@ -53,10 +53,17 @@ const agentNames = touched(
   /^evals\/agents\/([^/]+)\//,
 );
 
-const skills = skillNames.filter((n) => hasEvals("skills", n));
-const skippedSkills = skillNames.filter((n) => !hasEvals("skills", n));
-const agents = agentNames.filter((n) => hasEvals("agents", n));
-const skippedAgents = agentNames.filter((n) => !hasEvals("agents", n));
+// Defense-in-depth for the CI matrix: suite names interpolate into the workflow's shell
+// commands, so only kebab-safe names may reach the outputs; anything else is reported as
+// skipped, never run. (Reaching this with a hostile name already requires writing to the
+// repo — this closes the last mile anyway.)
+const SAFE_NAME = /^[a-z0-9][a-z0-9-]*$/i;
+const runnable = (n, tier) => SAFE_NAME.test(n) && hasEvals(tier, n);
+
+const skills = skillNames.filter((n) => runnable(n, "skills"));
+const skippedSkills = skillNames.filter((n) => !runnable(n, "skills"));
+const agents = agentNames.filter((n) => runnable(n, "agents"));
+const skippedAgents = agentNames.filter((n) => !runnable(n, "agents"));
 
 // The workflow tier measures the LIVE harness, so anything that changes it re-triggers it:
 // the root or .claude CLAUDE.md, any agent definition, the workflow cases, or the engine itself.
@@ -87,5 +94,7 @@ console.error(`changed files : ${changed.length}`);
 console.error(`skills → run  : ${skills.join(", ") || "(none)"}`);
 console.error(`agents → run  : ${agents.join(", ") || "(none)"}`);
 console.error(`workflow tier : ${runWorkflow ? "run" : "skip"}`);
-if (skippedSkills.length) console.error(`SKIP skills (no evals): ${skippedSkills.join(", ")}`);
-if (skippedAgents.length) console.error(`SKIP agents (no evals): ${skippedAgents.join(", ")}`);
+if (skippedSkills.length) console.error(`SKIP skills (no evals or unsafe name): ${skippedSkills.join(", ")}`);
+if (skippedAgents.length) console.error(`SKIP agents (no evals or unsafe name): ${skippedAgents.join(", ")}`);
+const unsafe = [...skillNames, ...agentNames].filter((n) => !SAFE_NAME.test(n));
+if (unsafe.length) console.error(`UNSAFE names (never run): ${unsafe.join(", ")}`);

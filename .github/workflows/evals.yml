@@ -1,0 +1,361 @@
+# Harness evals — self-check CI for the Claude Code harness (skills, agents, AGENTS.md routing).
+#
+# Two-speed design (lab 06, Experiment 5):
+#   • BLOCKING — `eval:quality` (static SKILL.md gate, no model, no secrets) + typecheck.
+#     Runs on every qualifying event, including fork PRs (fork PRs get no secrets at all).
+#   • ADVISORY — model-run tiers (skills/agents/workflow) publish a report artifact and a
+#     comparison against the main-branch baseline via eval:delta; continue-on-error until a
+#     calibrated baseline says otherwise. They run ONLY when:
+#       - the changed files touch that tier (scripts/ci-detect.mjs), and
+#       - OPENROUTER_API_KEY is configured, and
+#       - the event is not a fork PR (secrets never reach fork code).
+#
+# Budget invariants: only touched suites run (never eval:everything), n=2 trials, cheap
+# models (skills tier), per-job timeouts, and per-ref concurrency cancellation — a superseded
+# push cancels its in-flight runs instead of stacking billed sessions.
+#
+# Baseline: pushes to main re-run the same tiers with label prefix `ci-baseline` and upload
+# artifacts; PR runs use `ci-<short-sha>` and the compare job downloads the latest green
+# main-branch artifacts (actions: read, scoped to this job) to pair per-suite deltas.
+
+name: evals
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'evals/**'
+      - '.github/workflows/evals.yml'
+  pull_request:
+    paths:
+      - '.claude/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - 'evals/**'
+      - '.github/workflows/evals.yml'
+  workflow_dispatch:
+    inputs:
+      skills_model:
+        description: 'OpenRouter slug for the skills (content) tier'
+        default: 'deepseek/deepseek-chat'
+      tool_model:
+        description: 'OpenRouter slug for the agents + workflow (tool) tiers'
+        default: 'anthropic/claude-haiku-4.5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Detect which suites this change should run ──────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      skills: ${{ steps.detect.outputs.skills }}
+      agents: ${{ steps.detect.outputs.agents }}
+      run_workflow: ${{ steps.detect.outputs.run_workflow }}
+      has_key: ${{ steps.key.outputs.has_key }}
+      baseline_run_id: ${{ steps.baseline.outputs.run_id }}
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+    permissions:
+      contents: read
+      actions: read # gh run list for the baseline lookup
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: changed files → suites (scripts/ci-detect.mjs)
+        id: detect
+        working-directory: evals
+        env:
+          # workflow_dispatch has no PR base — diff from the root commit ("everything changed").
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            RANGE="$BASE_SHA...HEAD"
+          else
+            RANGE="$(git rev-list --max-parents=0 HEAD | tail -1)...HEAD"
+          fi
+          export CHANGED_FILES="$(git diff --name-only "$RANGE")"
+          node scripts/ci-detect.mjs
+
+      - name: is the model key configured? (never echoes the value)
+        id: key
+        env:
+          KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          [ -n "$KEY" ] && v=true || v=false
+          echo "has_key=$v" >> "$GITHUB_OUTPUT"
+
+      - name: latest green main-branch run (baseline artifacts)
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RID=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow evals.yml \
+            --branch main --status success --limit 1 \
+            --json databaseId --jq '.[0].databaseId // empty' 2>/dev/null || true)
+          echo "run_id=${RID:-}" >> "$GITHUB_OUTPUT"
+
+      - name: short sha
+        id: sha
+        run: echo "short_sha=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+  # ── 2. Quality — the BLOCKING gate. No model, no secrets; runs on fork PRs too ──
+  quality:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval:quality
+      - run: pnpm typecheck
+
+  # ── 3. Skills — content tier, native OpenRouter, no proxy. ADVISORY ─────────
+  skills:
+    needs: changes
+    if: >-
+      needs.changes.outputs.has_key == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      needs.changes.outputs.skills != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # model runs publish a report first; they do not block
+    strategy:
+      fail-fast: false
+      matrix:
+        skill: ${{ fromJSON(needs.changes.outputs.skills) }}
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EVAL_MODEL: ${{ inputs.skills_model || 'deepseek/deepseek-chat' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.skills_model || 'deepseek/deepseek-chat' }}
+      RUN_LABEL: ${{ github.event_name == 'push' && 'ci-baseline' || format('ci-{0}', needs.changes.outputs.short_sha) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm eval:repeat "skills/${{ matrix.skill }}" -n 2 --label "${RUN_LABEL}-skills-${{ matrix.skill }}"
+      - name: report
+        if: always()
+        run: |
+          {
+            echo "### evals (advisory) — skills/${{ matrix.skill }} @ ${RUN_LABEL}"
+            echo '```'
+            tail -n 4 results/history.jsonl 2>/dev/null || echo "(no history — run failed early)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evals-skills-${{ matrix.skill }}
+          path: evals/results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ── 4. Agents — tool tier; Anthropic slugs need the LiteLLM proxy. ADVISORY ──
+  agents:
+    needs: changes
+    if: >-
+      needs.changes.outputs.has_key == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      needs.changes.outputs.agents != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        agent: ${{ fromJSON(needs.changes.outputs.agents) }}
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_BASE_URL: http://localhost:4000
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EVAL_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      RUN_LABEL: ${{ github.event_name == 'push' && 'ci-baseline' || format('ci-{0}', needs.changes.outputs.short_sha) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+      - run: pnpm eval:repeat "agents/${{ matrix.agent }}" -n 2 --label "${RUN_LABEL}-agents-${{ matrix.agent }}" --no-file-parallelism
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
+      - name: report
+        if: always()
+        run: |
+          {
+            echo "### evals (advisory) — agents/${{ matrix.agent }} @ ${RUN_LABEL}"
+            echo '```'
+            tail -n 4 results/history.jsonl 2>/dev/null || echo "(no history — run failed early)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evals-agents-${{ matrix.agent }}
+          path: evals/results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ── 5. Workflow — live-harness tier. ADVISORY: activation cases are behaviour-shaped ──
+  workflow:
+    needs: changes
+    if: >-
+      needs.changes.outputs.has_key == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false) &&
+      needs.changes.outputs.run_workflow == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      EVAL_BACKEND: openrouter
+      OPENROUTER_BASE_URL: http://localhost:4000
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      EVAL_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      EVAL_JUDGE_MODEL: ${{ inputs.tool_model || 'anthropic/claude-haiku-4.5' }}
+      RUN_LABEL: ${{ github.event_name == 'push' && 'ci-baseline' || format('ci-{0}', needs.changes.outputs.short_sha) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: docker compose -f proxy/docker-compose.yml up -d
+      - run: pnpm proxy:wait
+      # CI owns a disposable checkout, so the workflow tier's live-repo writes are harmless here.
+      - run: pnpm eval:repeat workflow -n 2 --label "${RUN_LABEL}-workflow" --no-file-parallelism
+      - if: failure()
+        run: docker compose -f proxy/docker-compose.yml logs --tail 100
+      - if: always()
+        run: docker compose -f proxy/docker-compose.yml down
+      - name: report
+        if: always()
+        run: |
+          {
+            echo "### evals (advisory) — workflow @ ${RUN_LABEL}"
+            echo '```'
+            tail -n 4 results/history.jsonl 2>/dev/null || echo "(no history — run failed early)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evals-workflow
+          path: evals/results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ── 6. Baseline comparison — pairs each PR suite with main's latest green run ──
+  compare:
+    needs: [changes, skills, agents, workflow]
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.changes.outputs.has_key == 'true' &&
+      needs.changes.outputs.baseline_run_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # download baseline artifacts by run-id
+    defaults:
+      run:
+        working-directory: evals
+    env:
+      SHORT_SHA: ${{ needs.changes.outputs.short_sha }}
+      BASELINE_RUN_ID: ${{ needs.changes.outputs.baseline_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: evals/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: pr-artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+          pattern: evals-*
+      - uses: actions/download-artifact@v4
+        with:
+          path: baseline-artifacts
+          run-id: ${{ env.BASELINE_RUN_ID }}
+          github-token: ${{ github.token }}
+          pattern: evals-*
+
+      # Only the repeat-*.json tables matter for pairing; labels are unique per tier+suite.
+      - run: |
+          mkdir -p results
+          find pr-artifacts baseline-artifacts -name 'repeat-*.json' -exec cp {} results/ \; 2>/dev/null || true
+      - name: eval:delta per suite (baseline → this PR)
+        run: |
+          SUMMARY="$GITHUB_STEP_SUMMARY"
+          echo "### evals — baseline comparison (advisory)" >> "$SUMMARY"
+          for f in results/repeat-ci-baseline-*.json; do
+            [ -e "$f" ] || continue
+            suite=$(basename "$f" .json); suite=${suite#repeat-ci-baseline-}
+            pr_label="ci-${SHORT_SHA}-${suite}"
+            if [ -f "results/repeat-${pr_label}.json" ]; then
+              echo "#### ${suite}" >> "$SUMMARY"
+              echo '```' >> "$SUMMARY"
+              pnpm eval:delta "ci-baseline-${suite}" "$pr_label" 2>/dev/null \
+                | sed 's/\x1b\[[0-9;]*m//g' >> "$SUMMARY" || echo "(delta failed)" >> "$SUMMARY"
+              echo '```' >> "$SUMMARY"
+            else
+              echo "- ${suite}: no PR-side repeat table (suite skipped or failed before recording)" >> "$SUMMARY"
+            fi
+          done

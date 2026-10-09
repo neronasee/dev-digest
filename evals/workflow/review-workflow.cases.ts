@@ -93,14 +93,17 @@ export const cases: WorkflowCase[] = [
   },
   {
     kind: "activation",
-    // Crisper negative than the template's topical near-miss: the SAME discovery, but the ask is to
-    // document it in a README — which the skill's own description carves out ("Not for content that
-    // belongs in a README, docs/, or specs/ file"). This exercises a documented boundary of the skill
-    // instead of mere topical adjacency, so a pass means the model routes doc-work away from it.
+    // Carve-out negative — README-shaped content must NOT activate the skill ("Not for content that
+    // belongs in a README, docs/, or specs/ file"). Run 1 (2026-10-09) used the SAME pgvector discovery
+    // with a README destination and failed BY DESIGN: insight-shaped content never belongs in a README,
+    // so the model correctly treated the carve-out as content-type routing, invoked the skill, and set
+    // out to capture the gotcha in INSIGHTS.md instead. Non-activation is only the deterministic
+    // prescription for evergreen README content (a module overview for onboarding) — the one thing the
+    // carve-out actually excludes. Near-miss proximity retained: same module, pipeline domain.
     name: "README documentation ask must NOT activate engineering-insights (skill's own carve-out)",
     prompt:
-      "Щойно з'ясував, чому pgvector-запит повертав нуль рядків — розмірність колонки не збіглася " +
-      "після зміни моделі ембедингів. Зафіксуй це в README модуля reviewer-core, щоб більше не наступати.",
+      "Потрібно доповнити README модуля reviewer-core: додай розділ, який загалом описує, як " +
+      "влаштований review pipeline — етапи, компоненти, потік даних, — щоб новачок швидко зорієнтувався.",
     skill: "engineering-insights",
     shouldActivate: false,
     maxTurns: 4,

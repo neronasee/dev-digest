@@ -30,3 +30,8 @@ general_settings:
   # so the bearer token the SDK forwards (ANTHROPIC_AUTH_TOKEN=OPENROUTER_API_KEY) is ignored and
   # the proxy authenticates to OpenRouter with OPENROUTER_API_KEY from its own environment.
   # Do NOT expose this port publicly.
+  #
+  # Newer litellm:main-stable images refuse to boot without a master key
+  # (UnsafeMasterKeyError) — this flag restores the no-auth behavior this ephemeral
+  # gateway is designed around (CI runners, localhost only, container torn down after).
+  dangerously_permit_weak_or_unset_master_key: true

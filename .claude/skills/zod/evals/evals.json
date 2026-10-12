@@ -1,0 +1,37 @@
+{
+  "skill_name": "zod",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "For our POST /reviews/:id/submit endpoint I need the request-body validation built with Zod. The frontend sends JSON shaped like submit-payload.json (also attached: the TS interface our backend person drafted, naive-draft.ts — it's probably not quite right). Requirements: the parsed result must be typed and exported for the service layer; findings come in two variants keyed by the `style` field; notes is optional but never an empty string when present; the reviewer id arrives from a legacy string source but everything downstream treats it as a number; and I don't want random extra keys flowing into our DB writes. Produce the schemas and the exported type.",
+      "expected_output": "A Zod schema module: coerced reviewerId, discriminated union over `style`, notes handling that distinguishes absent/null/empty, unknown-key policy, z.infer-exported types — i.e. the practices the zod skill's schema-/object-/type- category rules teach.",
+      "files": [
+        "../zod-workspace/iteration-1/pr-review-schema/input/submit-payload.json",
+        "../zod-workspace/iteration-1/pr-review-schema/input/naive-draft.ts"
+      ],
+      "expectations": [
+        "The schema coerces reviewerId from string to number (z.coerce.number(), a union-of-string|number with transform/pipe, or z.preprocess — any documented coercion) so the payload's \"84213\" validates; a plain z.number() that rejects it fails this expectation",
+        "notes handles all three states deliberately per the optional-vs-nullable distinction: absent accepted, null accepted (nullish or nullable+optional with stated reasoning), and the empty string \"\" from the sample payload produces a validation error — the module, run against submit-payload.json, fails loudly at that finding rather than silently normalizing \"\" away",
+        "The two finding variants are modeled as z.discriminatedUnion(\"style\", [...]) or the choice of a plain union is explicitly justified against its worse error messages",
+        "The infra-noise key ciTraceId cannot reach the parsed output (strict() or an explicit documented strip decision) — unknown keys are handled deliberately, not passed through",
+        "Because coercion/transforms make the wire shape differ from the parsed shape, the module derives BOTH types from the schema — the output type via z.infer AND the input type via z.input (or an equivalent explicit input typing) — rather than exporting only the output type"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Look at review-handler.ts — when QA posts the attached failing-payload.json the endpoint returns a 400 with a raw error dump support can't read, and for other payloads it has thrown and 500'd. Rework the validation path: invalid payloads must return 400 with a per-field error map (field path -> human message), the schema's key handling must be a deliberate decision, and nothing raw should leak to the client. Give me the fixed handler and the exact 400 body it produces for the attached payload.",
+      "expected_output": "A reworked handler using safeParse (no throwing validation path), error mapping built from error.issues/flatten() rather than message string-matching, no String(error) leaking to clients, and an explicit strict/strip choice replacing the unexamined passthrough() — the zod skill's parse-/error-/object- category rules.",
+      "files": [
+        "../zod-workspace/iteration-1/safeparse-error-report/input/review-handler.ts",
+        "../zod-workspace/iteration-1/safeparse-error-report/input/failing-payload.json"
+      ],
+      "expectations": [
+        "The throwing .parse call is replaced by .safeParse (or an equivalent non-throwing validation path) inside the handler",
+        "The 400 body is built from the structured error data (result.error.issues, .flatten(), or .format()) — not by matching on error.message substrings",
+        "No raw error dump (String(e) of a ZodError or similar) is sent to the client in any branch",
+        "The passthrough() is replaced by an explicit, deliberate key policy (strict, or justified strip) and the extra ciRunId key does not silently flow into the persisted body",
+        "The delivered 400 body for failing-payload.json maps each failing field path (reviewerId, prNumber, verdict, summary) to a human-readable message"
+      ]
+    }
+  ]
+}

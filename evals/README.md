@@ -444,6 +444,11 @@ Shows the delta at three levels: per-test pass rate, per-**practice** (which pra
 improved/regressed — the main signal), and metrics (`baseline → candidate (±diff)`). Green =
 improved, red = regressed, dim = unchanged. A practice on one side only renders `— → X%`.
 
+`eval:delta` pairs two labels **from the same eval file** — the join key is the full
+nodeid (eval-file path + test name). An A/B split across two eval files (e.g. a
+`-lite` agent variant with its own `*.eval.ts`) cannot be paired; diff the
+per-practice repeat tables of the two labels manually instead.
+
 ### `eval:benchmark` — measured lift (with vs without the artifact)
 
 ```bash

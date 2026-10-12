@@ -42,3 +42,20 @@ export function formatWhen(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
+
+/**
+ * Expectation kinds a case declares — drives the kind badges in the cases
+ * table ("must find" / "must not flag"; a case declaring neither is a clean
+ * diff: zero findings expected). `expected_output` is z.unknown() on the
+ * wire, so parse defensively like everywhere else.
+ */
+export type ExpectationKind = "must_find" | "must_not_flag" | "clean";
+
+export function expectationKinds(expected: unknown): ExpectationKind[] {
+  if (typeof expected !== "object" || expected === null) return ["clean"];
+  const e = expected as Record<string, unknown>;
+  const kinds: ExpectationKind[] = [];
+  if (Array.isArray(e.must_find) && e.must_find.length > 0) kinds.push("must_find");
+  if (Array.isArray(e.must_not_flag) && e.must_not_flag.length > 0) kinds.push("must_not_flag");
+  return kinds.length > 0 ? kinds : ["clean"];
+}

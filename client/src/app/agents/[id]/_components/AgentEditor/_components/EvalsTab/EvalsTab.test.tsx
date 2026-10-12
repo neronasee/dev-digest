@@ -54,7 +54,7 @@ const AGENT: Agent = {
   version: 2,
 };
 
-const CASE = (id: string, name: string): EvalCase => ({
+const CASE = (id: string, name: string, expected: unknown = {}): EvalCase => ({
   id,
   owner_kind: "agent",
   owner_id: "ag1",
@@ -62,7 +62,7 @@ const CASE = (id: string, name: string): EvalCase => ({
   input_diff: "diff",
   input_files: null,
   input_meta: null,
-  expected_output: {},
+  expected_output: expected,
   notes: null,
 });
 
@@ -123,7 +123,11 @@ beforeEach(() => {
 describe("EvalsTab — cases table latest outcome", () => {
   it("shows passed/failed/never run from the newest trace per case", () => {
     mockData(
-      [CASE("c1", "stripe-key"), CASE("c2", "n-plus-one"), CASE("c3", "clean-diff")],
+      [
+        CASE("c1", "stripe-key", { must_find: [{ file: "src/config.ts", start_line: 10, end_line: 12 }] }),
+        CASE("c2", "n-plus-one", { must_not_flag: [{ file: "src/api/users.ts", start_line: 45, end_line: 52 }] }),
+        CASE("c3", "clean-diff"),
+      ],
       [
         SWEEP("sw-new", 2, [TRACE("c1", true)]),
         SWEEP("sw-old", 1, [TRACE("c1", false), TRACE("c2", false, 0.5)]),
@@ -134,13 +138,16 @@ describe("EvalsTab — cases table latest outcome", () => {
     const row1 = screen.getByText("stripe-key").closest("tr")!;
     expect(within(row1).getByText("passed")).toBeInTheDocument();
     expect(within(row1).getByText(/recall 100%/)).toBeInTheDocument();
+    expect(within(row1).getByText("must find")).toBeInTheDocument();
 
     const row2 = screen.getByText("n-plus-one").closest("tr")!;
     expect(within(row2).getByText("failed")).toBeInTheDocument();
     expect(within(row2).getByText(/recall 50%/)).toBeInTheDocument();
+    expect(within(row2).getByText("must not flag")).toBeInTheDocument();
 
     const row3 = screen.getByText("clean-diff").closest("tr")!;
     expect(within(row3).getByText("never run")).toBeInTheDocument();
+    expect(within(row3).getByText("clean")).toBeInTheDocument();
   });
 
   it("shows the empty state and a disabled sweep trigger when there are no cases", () => {

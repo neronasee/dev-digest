@@ -50,6 +50,8 @@ export const s = {
     color: "var(--text-muted)",
   } satisfies CSSProperties,
   recallHint: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+  /** Expectation-kind badges inline after the case name. */
+  kindBadges: { display: "inline-flex", gap: 6, marginLeft: 8, verticalAlign: "middle" } satisfies CSSProperties,
   rowActions: { display: "flex", gap: 6, justifyContent: "flex-end" } satisfies CSSProperties,
   mono: { fontFamily: "var(--mono, monospace)", fontSize: 12.5 } satisfies CSSProperties,
   historyRow: { display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" } satisfies CSSProperties,

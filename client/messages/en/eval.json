@@ -80,7 +80,10 @@
     "edit": "Edit",
     "delete": "Delete",
     "deleteTitle": "Delete eval case",
-    "deleteBody": "Delete “{name}” and its run history? This cannot be undone."
+    "deleteBody": "Delete “{name}” and its run history? This cannot be undone.",
+    "kindMustFind": "must find",
+    "kindMustNotFlag": "must not flag",
+    "kindClean": "clean"
   },
   "compare": {
     "title": "Compare runs",

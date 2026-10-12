@@ -20,8 +20,23 @@ import { EvalCaseModal } from "@/components/eval-case-modal";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { CompareRunsModal } from "../CompareRunsModal";
 import { COMPARE_CHOICES, METRICS } from "./constants";
-import { formatWhen, latestByCase, metricSeries, pctText, sweepPassed } from "./helpers";
+import {
+  formatWhen,
+  latestByCase,
+  metricSeries,
+  pctText,
+  sweepPassed,
+  expectationKinds,
+  type ExpectationKind,
+} from "./helpers";
 import { s } from "./styles";
+
+/** Expectation-kind badge color + i18n key per kind. */
+const KIND_BADGE: Record<ExpectationKind, { color: string; labelKey: string }> = {
+  must_find: { color: "var(--ok)", labelKey: "evalsTab.kindMustFind" },
+  must_not_flag: { color: "var(--crit)", labelKey: "evalsTab.kindMustNotFlag" },
+  clean: { color: "var(--text-muted)", labelKey: "evalsTab.kindClean" },
+};
 
 interface ModalState {
   /** null = blank new case; a case = edit mode. */
@@ -127,7 +142,16 @@ export function EvalsTab({ agent }: { agent: Agent }) {
               const runningThis = runCase.isPending && runCase.variables === c.id;
               return (
                 <tr key={c.id}>
-                  <td style={{ ...s.td, ...s.caseName }}>{c.name}</td>
+                  <td style={{ ...s.td, ...s.caseName }}>
+                    {c.name}
+                    <span style={s.kindBadges}>
+                      {expectationKinds(c.expected_output).map((k) => (
+                        <Badge key={k} mono color={KIND_BADGE[k].color}>
+                          {t(KIND_BADGE[k].labelKey)}
+                        </Badge>
+                      ))}
+                    </span>
+                  </td>
                   <td style={s.td}>
                     {trace ? (
                       <>

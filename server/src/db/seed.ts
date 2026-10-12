@@ -33,6 +33,7 @@ import {
   ensureContextFixture,
 } from './seed-context.js';
 import { DEMO_TOUR } from './seed-onboarding.js';
+import { seedEvalGoldSet } from './seed-eval.js';
 
 /** Default provider/model for the built-in reviewer agents. */
 const DEFAULT_PROVIDER = 'openrouter' as const;
@@ -774,6 +775,12 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       });
     }
   }
+
+  // ---- Eval gold set (AC-34) ----
+  // Decides the two PR-#482 seed findings (accept/dismiss) and inserts the
+  // Security Reviewer's fixed-input eval cases. Idempotent internally —
+  // re-seeding never duplicates cases nor overwrites finding decisions.
+  await seedEvalGoldSet(db, workspaceId, pr!.id);
 
   return { workspaceId, userId };
 }

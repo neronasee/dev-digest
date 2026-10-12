@@ -26,6 +26,13 @@ branch for the "next number". The slug is the feature's name, kebab-case.
 Legacy specs in the module folders use `NN-slug.md` numbering (`01-`, `02-`, …). They
 stay as-is — not retroactively migrated or renamed; append-only history.
 
+## Current specs
+
+- [`2026-10-02-project-context-folder.md`](2026-10-02-project-context-folder.md)
+- [`2026-10-03-pr-brief.md`](2026-10-03-pr-brief.md)
+- [`2026-10-03-repository-onboarding-tour.md`](2026-10-03-repository-onboarding-tour.md)
+- [`2026-10-10-eval-pipeline.md`](2026-10-10-eval-pipeline.md) — L06 homework: regression evals for review agents
+
 ## Shape
 
 ```md

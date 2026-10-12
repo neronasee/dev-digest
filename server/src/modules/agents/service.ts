@@ -139,6 +139,23 @@ export class AgentsService {
     return row ? toAgentVersionDto(row) : undefined;
   }
 
+  /**
+   * Promote (restore) a past config snapshot onto the live agent (AC-27–AC-29).
+   * One transaction in the repository: config fields + skill links + context
+   * docs restored, version bumped, new snapshot appended. Promoting the LIVE
+   * config is a no-op that returns the current agent WITHOUT a version bump
+   * (AC-29). Returns undefined when the agent or that version is absent from
+   * the workspace (route → 404).
+   */
+  async promoteVersion(
+    workspaceId: string,
+    agentId: string,
+    version: number,
+  ): Promise<Agent | undefined> {
+    const row = await this.repo.restoreVersion(workspaceId, agentId, version);
+    return row ? toAgentDto(row) : undefined;
+  }
+
   /** Linked skills for an agent as AgentSkillLink[] (ordered). */
   async skillLinks(agentId: string): Promise<AgentSkillLink[]> {
     const links = await this.repo.linkedSkills(agentId);

@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Verdict, Finding } from './findings.js';
-import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowledge.js';
+import { Verdict, Finding, Severity, FindingCategory } from './findings.js';
+import { EvalRun, EvalPerTrace, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowledge.js';
 
 /**
  * A4 — Eval / CI / Compose / Conformance API contracts (L06).
@@ -45,14 +45,6 @@ export const EvalRunRecord = z.object({
 });
 export type EvalRunRecord = z.infer<typeof EvalRunRecord>;
 
-/** Result of running a single case: the metrics (EvalRun) + the persisted row id. */
-export const EvalRunResult = z.object({
-  run_id: z.string(),
-  case_id: z.string(),
-  result: EvalRun,
-});
-export type EvalRunResult = z.infer<typeof EvalRunResult>;
-
 /** One point on the dashboard trend (per run, chronological). */
 export const EvalTrendPoint = z.object({
   ran_at: z.string(),
@@ -87,6 +79,126 @@ export const EvalDashboard = z.object({
   alert: z.string().nullable(),
 });
 export type EvalDashboard = z.infer<typeof EvalDashboard>;
+
+// ===========================================================================
+// Eval pipeline (L06 homework) — fixed-input regression evals
+//
+// The expected-output JSON convention and the sweep-grouping envelope are
+// pinned here so writer (server) and readers (client dashboard) cannot drift.
+// A sweep trigger writes one `eval_runs` row per case; every row of one sweep
+// carries the SAME `sweep_id` inside its `actual_output` jsonb envelope
+// (`EvalActualOutput`) — grouping happens in JS over rows already fetched.
+// ===========================================================================
+
+/** One expected finding: exact `file` string equality + `[start_line,end_line]` overlap. */
+export const EvalExpectation = z.object({
+  file: z.string(),
+  start_line: z.number().int().min(1),
+  end_line: z.number().int().min(1),
+  severity: Severity.optional(),
+  category: FindingCategory.optional(),
+  title: z.string().optional(),
+});
+export type EvalExpectation = z.infer<typeof EvalExpectation>;
+
+/**
+ * The scored shape stored in `eval_cases.expected_output` (parsed, size-capped
+ * data — never interpolated into a prompt). Both arrays optional; a case with
+ * neither (or both empty) is a CLEAN case — it passes only when the agent
+ * reports zero findings.
+ */
+export const EvalExpectedOutput = z.object({
+  must_find: z.array(EvalExpectation).optional(),
+  must_not_flag: z.array(EvalExpectation).optional(),
+});
+export type EvalExpectedOutput = z.infer<typeof EvalExpectedOutput>;
+
+/**
+ * Sweep-grouping envelope persisted in `eval_runs.actual_output` for every
+ * eval-pipeline run: a fresh UUID per sweep trigger, written identically to
+ * every row of that sweep, plus the run's grounded findings and the
+ * pre-grounding candidate count (for citation accuracy).
+ */
+export const EvalActualOutput = z.object({
+  sweep_id: z.string().uuid(),
+  agent_id: z.string().uuid(),
+  agent_version: z.number().int(),
+  findings: z.array(Finding),
+  pre_grounding_count: z.number().int().min(0),
+  error: z.string().nullable(),
+});
+export type EvalActualOutput = z.infer<typeof EvalActualOutput>;
+
+/** One case's outcome inside a sweep (an `eval_runs` row) — metrics + trace. */
+export const EvalTrace = EvalPerTrace.extend({
+  case_id: z.string(),
+  recall: z.number().min(0).max(1),
+  precision: z.number().min(0).max(1),
+  citation_accuracy: z.number().min(0).max(1),
+  duration_ms: z.number().int(),
+  cost_usd: z.number().nullable(),
+  error: z.string().nullable(),
+});
+export type EvalTrace = z.infer<typeof EvalTrace>;
+
+/**
+ * One sweep (one trigger of "Run eval"): the aggregate `EvalRun` metrics
+ * (macro-averaged over the non-errored traces) linked to the agent version
+ * that produced them, plus the per-case traces. `errored` counts the traces
+ * that failed outright — they are excluded from the averages but NOT from
+ * `traces_total`, and they count as not-passing.
+ */
+export const EvalSweep = EvalRun.extend({
+  sweep_id: z.string().uuid(),
+  agent_id: z.string().uuid(),
+  agent_version: z.number().int(),
+  ran_at: z.string(),
+  errored: z.number().int(),
+  per_trace: z.array(EvalTrace),
+});
+export type EvalSweep = z.infer<typeof EvalSweep>;
+
+/**
+ * Result of running ONE persisted case (`POST /agents/:id/eval-cases/:caseId/run`):
+ * the persisted `eval_runs` row id + the scored result. The single trace is a
+ * FULL `EvalTrace` (case_id, per-trace metrics, error) — typing it as the base
+ * `EvalRun`/`EvalPerTrace` shapes makes the zod serializer strip exactly those
+ * fields, so the response schema must match what the server actually writes.
+ */
+export const EvalRunResult = z.object({
+  run_id: z.string(),
+  case_id: z.string(),
+  result: EvalRun.extend({ per_trace: z.array(EvalTrace) }),
+});
+export type EvalRunResult = z.infer<typeof EvalRunResult>;
+
+/**
+ * Result of `POST /agents/:id/eval-cases/draft-run` — scored, NEVER persisted.
+ * Single-trace like `EvalRunResult`: the one trace is a full `EvalTrace` (the
+ * unsaved case has no id, so `case_id` is `''`).
+ */
+export const EvalDraftRunResult = z.object({
+  result: EvalRun.extend({ per_trace: z.array(EvalTrace) }),
+});
+export type EvalDraftRunResult = z.infer<typeof EvalDraftRunResult>;
+
+/** One eval owner (an agent) on the /eval dashboard: its latest sweep + trend. */
+export const EvalOwnerSummary = z.object({
+  agent_id: z.string().uuid(),
+  agent_name: z.string(),
+  cases_total: z.number().int(),
+  latest: EvalSweep.nullable(),
+  trend: z.array(EvalTrendPoint),
+});
+export type EvalOwnerSummary = z.infer<typeof EvalOwnerSummary>;
+
+/** Create/update body for an eval case — id + owner resolved by the route. */
+export const EvalCaseWriteBody = EvalCaseInput.omit({
+  owner_kind: true,
+  owner_id: true,
+  input_files: true,
+});
+export type EvalCaseWriteBody = z.infer<typeof EvalCaseWriteBody>;
 
 // ===========================================================================
 // Compose Review

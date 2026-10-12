@@ -44,6 +44,7 @@ const DeleteAgentResponse = z.object({ ok: z.boolean() });
  *   PUT    /agents/:id              → update / toggle enabled (versions config)
  *   GET    /agents/:id/versions     → config history (newest first)
  *   GET    /agents/:id/versions/:version → one config snapshot
+ *   POST   /agents/:id/versions/:version/promote → restore that config (AC-27–AC-29)
  *   GET    /agents/:id/skills       → linked skills (ordered)
  *   POST   /agents/:id/skills       → set/reorder linked skills OR link one
  *   GET    /agents/:id/models       → dynamic model list for the agent's provider
@@ -179,6 +180,20 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
       const version = await service.getVersion(workspaceId, req.params.id, req.params.version);
       if (!version) throw new NotFoundError('Agent version not found');
       return version;
+    },
+  );
+
+  // Promote (restore) a past config snapshot onto the live agent. No body —
+  // the version in the path IS the request. Returns the resulting Agent; a
+  // no-op (promoting the live config) returns it unchanged without a bump.
+  app.post(
+    '/agents/:id/versions/:version/promote',
+    { schema: { params: VersionParams, response: { 200: Agent } } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const agent = await service.promoteVersion(workspaceId, req.params.id, req.params.version);
+      if (!agent) throw new NotFoundError('Agent version not found');
+      return agent;
     },
   );
 

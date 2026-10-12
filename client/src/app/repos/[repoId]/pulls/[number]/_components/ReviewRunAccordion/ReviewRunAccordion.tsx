@@ -7,7 +7,7 @@
 
 import React from "react";
 import { Icon, Badge } from "@devdigest/ui";
-import type { ReviewRecord, Verdict } from "@devdigest/shared";
+import type { FindingRecord, ReviewRecord, Verdict } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
 import { useDeleteReview } from "@/lib/hooks/reviews";
@@ -31,6 +31,7 @@ export function ReviewRunAccordion({
   headSha,
   targetRunId = null,
   targetRequest = 0,
+  onEvalCase,
 }: {
   review: ReviewRecord;
   prId: string;
@@ -40,6 +41,8 @@ export function ReviewRunAccordion({
   /** A timeline navigation request opens this run before scrolling to it. */
   targetRunId?: string | null;
   targetRequest?: number;
+  /** Threaded to this run's finding cards ("Turn into eval case"). */
+  onEvalCase?: (f: FindingRecord) => void;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -156,6 +159,7 @@ export function ReviewRunAccordion({
             prId={prId}
             repoFullName={repoFullName}
             headSha={headSha}
+            onEvalCase={onEvalCase}
           />
         </div>
       )}

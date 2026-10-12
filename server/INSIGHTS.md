@@ -15,6 +15,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-10 — A per-case-scripted LLM mock (rule list mapping DIFF-CONTENT regexes → cited findings, flags for silent/flag-dismissed modes) makes a whole eval gold-set sweep deterministic in the it-lane — every must_find case passes, clean cases stay clean, and metric movement is a flag flip, no fixture-per-case needed. (test/evals.it.test.ts ScriptedEvalLLM)
+
 - 2026-10-03 — For a feature-model-driven LLM call, the it-lane mock must sit on the provider slot the REGISTRY default names (onboarding → `overrides.llm.openrouter`), not `'openai'` by habit — and the settings-override test injects the override's provider slot too, so both the default and the override path stay mocked. (test/onboarding.it.test.ts, src/modules/_shared/feature-models.ts)
 
 - 2026-09-28 — The persistent repo-intel blast path returns `degraded: false` even when `repo_index_state.status = 'partial'` (only the flag-off/no-index fallbacks set the flag), so a consumer that must surface partial-ness reads `getIndexState()` once alongside `getBlastRadius()` and folds it into the reason chain — never trust `result.degraded` alone. (src/modules/blast/service.ts)
@@ -29,6 +31,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-12 — A seed UPDATE matched only by finding file, line, and title can change identical findings in later reviews or other workspaces; pass the seeded PR ID and scope decisions to its `model='seed'` review ID, while checking both decision columns before writing. (src/db/seed-eval.ts:289)
+
 - 2026-10-04 — A grounding gate that returns `{ kept, dropped }` ships silently if the caller assembles the document from the RAW draft instead of `kept`: unit tests on the gate pass (they test it in isolation), so only an end-to-end it test asserting the SERVED arrays catches it — brief's first run served unfiltered invented refs until `test/brief.it.test.ts` compared the response against the empty universe. (src/modules/brief/service.ts, test/brief.it.test.ts)
 - 2026-10-02 — The 2026-09-21 trace-write race has a second live site: `reviews.it.test.ts`'s "persists per-run cost" test reads `GET /runs/:id/trace` straight after `waitForPrRuns` and flakes ONLY under full-lane parallel load (19 containers saturating the host) — verified pre-existing by stashing the branch and running the baseline, which flakes the same test; poll the trace row there too. (test/reviews.it.test.ts:417)
 - 2026-09-24 — A JSDoc comment containing a backtick-quoted path glob like `*/specs/` terminates the block comment EARLY at the embedded `*/`, and the leftover suffix then parses as code — cascading into misleading "unterminated template literal" / "Expected ';' but found '{'" errors dozens of lines away from the real site (bisect by neutralizing backtick-bearing lines one at a time, not by reading the reported line). (src/modules/reviews/intent.ts findDocRefs doc-comment)
@@ -37,6 +41,8 @@ Contract:
 ## Codebase Patterns
 
 <!-- newest on top -->
+
+- 2026-10-10 — The eval dashboard's `alert` is NOT prose: the service joins degraded metric NAMES with commas (`"recall,precision"`, helpers.degradedMetrics) and the client maps each through its `dashboard.metrics.*` i18n labels — and sweep grouping keys off `EvalActualOutput.sweep_id` inside the `actual_output` jsonb, silently skipping rows whose envelope is null/unparseable (legacy rows surface only in recent_runs, never as fabricated sweeps). (src/modules/evals/helpers.ts, src/modules/evals/service.ts)
 
 - 2026-10-04 — A container facade getter over a service whose module's HELPERS also type-import the Container grows the no-circular warn count by TWO, not one: `container.blast` added `blast/service ↔ container` (the ledgered shape) AND `blast/helpers → container → blast/service → blast/helpers`, because blast/helpers' `Container['repoIntel']` type derivation was cycle-invisible until the container started importing blast/service — grep the target module for `Container` type imports before promising "+1 warn" for a facade. (src/platform/container.ts, src/modules/blast/helpers.ts)
 
@@ -70,6 +76,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-12 — Inside a vendored contracts file, a zod schema declared EARLY cannot reference a `const` schema declared LATER in the same file — module evaluation hits the temporal dead zone and import itself throws "Cannot access 'EvalTrace' before initialization" (a RUNTIME error, not a type error tsc catches): reusing `EvalTrace` in `EvalRunResult` forced relocating that response schema below `EvalTrace`'s declaration, so schema order in these files is load-bearing. (src/vendor/shared/contracts/eval-ci.ts)
+
 - 2026-10-03 — An "or null when it adds nothing" escape hatch in a generation prompt is taken literally by a low-temperature model (live: deepseek emitted a null Mermaid diagram for an obviously multi-layer repo and the section rendered prose-only): when an output is wanted in the common case, make it REQUIRED in the prompt and enumerate the narrow null condition ("only a genuinely single-component repo") instead. (src/modules/onboarding/prompt.ts)
 
 - 2026-10-03 — `MockGitClient.readFile` returns `''` for a missing path while `SimpleGitClient.readFile` throws: a clone wish-list loop must treat a falsy/blank read as "not present" (never only a catch), or the mock lane silently feeds empty artifacts a real clone would have skipped. (src/adapters/mocks.ts, src/modules/onboarding/service.ts)
@@ -94,6 +102,10 @@ Contract:
 ## Recurring Errors & Fixes
 
 <!-- newest on top -->
+
+- 2026-10-12 — SUPERSEDES the 2026-10-10 entry below: `EvalRunResult`/`EvalDraftRunResult` now type their `result.per_trace` as `z.array(EvalTrace)` (full trace — case_id/per-trace metrics/error survive serialization), so asserting `per_trace[0].error` on draft-run / case-run responses works; `per_trace[0].actual` still carries the sweep/draft envelope (z.unknown()) and stays the read for findings. (src/vendor/shared/contracts/eval-ci.ts, src/modules/evals/service.ts singleTraceResult)
+
+- 2026-10-10 — An it-test asserting `result.per_trace[0].error` on `POST …/draft-run` or `POST …/eval-cases/:id/run` reads `undefined`, not `null`: those routes type `per_trace` as base `EvalPerTrace`, so the zod serializer STRIPS the EvalTrace-only fields (error/recall/cost_usd) — assert `per_trace[0].actual.error` (z.unknown() preserves the envelope) or use the EvalSweep-typed history routes, which carry the full EvalTrace. (src/modules/evals/routes.ts, test/evals.it.test.ts)
 
 - 2026-10-02 — Extending a vendored shared contract ripples into consumer files the change plan didn't list: a `.default()` field (AgentVersionConfig.context_docs) materializes in every safeParse DTO and fails `toEqual` fixtures that pin parsed output (src/modules/agents/helpers.test.ts), and union-widening RunTrace.specs_read breaks client code mapping entries straight to ReactNode (../client TraceBody.tsx) until the owning UI task lands — grep consumers of the exact schema before editing src/vendor/shared. (src/vendor/shared/contracts/)
 - 2026-09-24 — A review-round it-test that mocks only `llm.openai` silently runs the intent pre-work against REAL providers: `server/.env` (loaded by `dotenv/config`) carries live OPENROUTER_API_KEY/GITHUB_TOKEN, so an unoverridden `container.llm('openrouter')`/`container.github()` put a ~5s BILLED OpenRouter call plus GitHub lookups into every round BEFORE any run claims 'running' — runs sit 'queued' past the polling windows with zero LLM calls recorded. Any suite whose round touches a new adapter must mock it (helpers/intent.ts); diagnose by dumping `container.runBus.buffer(runId)` (timestamps per event), not the failing assertion. (test/helpers/intent.ts, test/reviews.it.test.ts)

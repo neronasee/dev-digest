@@ -27,6 +27,15 @@ export type ConventionRow = typeof t.conventions.$inferSelect;
 export type OnboardingRow = typeof t.onboarding.$inferSelect;
 export type PrIntentRow = typeof t.prIntent.$inferSelect;
 export type PrBriefRow = typeof t.prBrief.$inferSelect;
+export type EvalCaseRow = typeof t.evalCases.$inferSelect;
+export type EvalRunRow = typeof t.evalRuns.$inferSelect;
+/**
+ * Write shapes for the evals module (mirrors PrIntentWrite's rationale: a
+ * table's write shape lives beside its row type so the repository can type its
+ * write seam without importing the module's application layer).
+ */
+export type EvalCaseWrite = typeof t.evalCases.$inferInsert;
+export type EvalRunWrite = typeof t.evalRuns.$inferInsert;
 /**
  * What `upsertIntent` persists: the classification + code-side provenance.
  * Lives here (not in the reviews module) so the repository can type its write

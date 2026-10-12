@@ -23,7 +23,14 @@ import { usePrReviews, useCancelRun, usePrActiveRuns, usePrRuns, useDeleteRun } 
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
 import { githubPrUrl } from "@/lib/github-urls";
+import { EvalCaseModal } from "@/components/eval-case-modal";
 import type { FindingRecord } from "@devdigest/shared";
+
+/** The "Turn into eval case" target: the finding + its review's agent. */
+interface EvalCaseTarget {
+  finding: FindingRecord;
+  agentId: string | null;
+}
 
 export function PrDetailView() {
   const params = useParams<{ repoId: string; number: string }>();
@@ -85,6 +92,18 @@ export function PrDetailView() {
     [runs],
   );
   const lethalTrifecta = allFindings.filter((f) => f.kind === "lethal_trifecta");
+
+  // Eval-case seam: a finding card's "Turn into eval case" opens the shared
+  // modal prefilled from this PR (files/title/body) + the finding's verdict;
+  // the owning agent defaults to the review that produced the finding.
+  const [evalCaseTarget, setEvalCaseTarget] = React.useState<EvalCaseTarget | null>(null);
+  const onFindingEvalCase = React.useCallback(
+    (f: FindingRecord) => {
+      const review = runs.find((r) => r.id === f.review_id);
+      setEvalCaseTarget({ finding: f, agentId: review?.agent_id ?? null });
+    },
+    [runs],
+  );
 
   const repoName = activeRepo?.full_name ?? repoId;
   // The real "owner/repo" (null until the repo is loaded) — used to build
@@ -168,6 +187,7 @@ export function PrDetailView() {
             prCommits={pr.commits}
             repoFullName={repoFullName}
             headSha={pr.head_sha}
+            onEvalCase={onFindingEvalCase}
             cancelMutation={cancel}
             onOpenTrace={(id) => setParam("trace", id)}
             onDelete={(id) => {
@@ -203,6 +223,16 @@ export function PrDetailView() {
           findings={runs.find((r) => r.run_id === traceRunId)?.findings ?? []}
           agentName={runs.find((r) => r.run_id === traceRunId)?.agent_name ?? null}
           onClose={() => setParam("trace", null)}
+        />
+      )}
+
+      {evalCaseTarget && (
+        <EvalCaseModal
+          agentId={evalCaseTarget.agentId}
+          finding={evalCaseTarget.finding}
+          files={pr.files}
+          prMeta={{ title: pr.title, body: pr.body ?? null }}
+          onClose={() => setEvalCaseTarget(null)}
         />
       )}
     </AppShell>

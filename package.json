@@ -1,0 +1,8 @@
+{
+  "name": "devdigest",
+  "private": true,
+  "scripts": {
+    "//": "verify:l06 runs each package's checks: reviewer-core tests + typecheck, server tests (full lane — the DB-backed *.it.test.ts files self-skip when Docker is unavailable) + typecheck, client tests + typecheck.",
+    "verify:l06": "npm --prefix reviewer-core test && npm --prefix reviewer-core run typecheck && pnpm -C server test && pnpm -C server typecheck && pnpm -C client typecheck && pnpm -C client test"
+  }
+}

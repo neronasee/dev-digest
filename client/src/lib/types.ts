@@ -67,3 +67,17 @@ export type {
   PrHistory,
   PrHistoryItem,
 } from "@devdigest/shared";
+export type {
+  EvalCase,
+  EvalCaseWriteBody,
+  EvalDashboard,
+  EvalDraftRunResult,
+  EvalExpectation,
+  EvalExpectedOutput,
+  EvalOwnerKind,
+  EvalOwnerSummary,
+  EvalRunResult,
+  EvalSweep,
+  EvalTrace,
+  EvalTrendPoint,
+} from "@devdigest/shared";

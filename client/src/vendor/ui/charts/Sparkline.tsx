@@ -12,7 +12,8 @@ export function Sparkline({
   w?: number;
   h?: number;
 }) {
-  if (!data.length) return null;
+  // A trend needs ≥2 points: with one, x = i/(n-1) is 0/0 → NaN attributes.
+  if (data.length < 2) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
   const span = max - min || 1;

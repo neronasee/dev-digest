@@ -31,6 +31,7 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-12 — Aborting `POST /agents/:id/eval-runs` can leave a partial sweep: `runSweep` inserts each case before moving to the next, and history groups whatever rows share its sweep ID, so use explicit case names and counts when comparing interrupted runs. (src/modules/evals/service.ts:190)
 - 2026-10-12 — A seed UPDATE matched only by finding file, line, and title can change identical findings in later reviews or other workspaces; pass the seeded PR ID and scope decisions to its `model='seed'` review ID, while checking both decision columns before writing. (src/db/seed-eval.ts:289)
 
 - 2026-10-04 — A grounding gate that returns `{ kept, dropped }` ships silently if the caller assembles the document from the RAW draft instead of `kept`: unit tests on the gate pass (they test it in isolation), so only an end-to-end it test asserting the SERVED arrays catches it — brief's first run served unfiltered invented refs until `test/brief.it.test.ts` compared the response against the empty universe. (src/modules/brief/service.ts, test/brief.it.test.ts)

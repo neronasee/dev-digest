@@ -95,7 +95,10 @@ flowchart TB
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace) · /pulls/:id/smart-diff"]
   end
   subgraph Agents["Agents"]
-    agents["agents<br/>/agents · /agents/:id"]
+    agents["agents<br/>/agents · /agents/:id<br/>POST /agents/:id/versions/:version/promote"]
+  end
+  subgraph Evals["Evals (regression evals, L06)"]
+    evals["evals<br/>GET|POST /agents/:id/eval-cases · PUT|DELETE …/eval-cases/:caseId<br/>POST …/eval-cases/draft-run · POST …/eval-cases/:caseId/run (rate-limited)<br/>POST|GET /agents/:id/eval-runs · GET /eval/owners · GET /eval/dashboard"]
   end
   subgraph SkillsLab["Skills Lab"]
     skills["skills<br/>/skills · /skills/:id · /skills/:id/versions · POST /skills/import-url"]

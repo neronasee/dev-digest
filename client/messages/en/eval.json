@@ -9,6 +9,9 @@
     "metricTrend": "Metric trend",
     "recentRuns": "Recent runs",
     "noRuns": "No runs yet. Create an eval case and run it.",
+    "agentPicker": "Agent",
+    "allAgents": "All agents",
+    "degraded": "Degraded vs previous run: {metrics}",
     "metrics": {
       "recall": "RECALL",
       "precision": "PRECISION",
@@ -37,6 +40,10 @@
     "running": "Running…",
     "save": "Save",
     "saving": "Saving…",
+    "cancel": "Cancel",
+    "agentLabel": "Agent",
+    "costWarning": "Running a case makes a real LLM call with this agent and is billed to its provider key. Run it now?",
+    "tooLarge": "A field exceeds the server's size cap — shorten it before saving.",
     "nameLabel": "Name",
     "namePlaceholder": "stripe-key-leak",
     "inputLabel": "Input",
@@ -71,7 +78,19 @@
     "run": "Run",
     "running": "Running…",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "deleteTitle": "Delete eval case",
+    "deleteBody": "Delete “{name}” and its run history? This cannot be undone.",
+    "kindMustFind": "must find",
+    "kindMustNotFlag": "must not flag",
+    "kindClean": "clean"
+  },
+  "compare": {
+    "title": "Compare runs",
+    "promptDiff": "System-prompt diff",
+    "promote": "Promote v{version}",
+    "promoteDisabled": "Already live",
+    "pickHint": "Pick the two runs to compare — the newest two are preselected."
   },
   "page": {
     "crumbSkillsLab": "Skills Lab",

@@ -1,7 +1,9 @@
 /* FindingCard — ported from findings.jsx (createElement → TSX).
    Severity icon+label, category, file:line, confidence, markdown rationale +
    suggestion, accept/dismiss actions. Accept/dismiss reflect persisted
-   timestamps. */
+   timestamps. "Turn into eval case" (optional onEvalCase) is enabled only on
+   DECIDED findings (accepted_at || dismissed_at) — the eval gold set is built
+   from human verdicts. */
 "use client";
 
 import React from "react";
@@ -31,6 +33,7 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  onEvalCase,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -39,6 +42,8 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** One-click "Turn into eval case" — only for findings with a verdict. */
+  onEvalCase?: (f: FindingRecord) => void;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
@@ -109,6 +114,17 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {onEvalCase && (
+              <Button
+                kind="ghost"
+                size="sm"
+                icon="Target"
+                disabled={!muted}
+                onClick={() => onEvalCase(f)}
+              >
+                {t("finding.turnIntoEvalCase")}
+              </Button>
+            )}
           </div>
         </div>
       )}

@@ -27,7 +27,8 @@ flowchart TD
   ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
 
-  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills · context)"]
+  AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills · context · evals)"]
+  EVAL["/eval<br/>Eval Dashboard (owner cards · trend · recent runs)"]
   SKILLS["/skills<br/>Skills Lab cards"] --> SKILL["/skills/:id<br/>editor (config · preview · versioning)"]
   CONV["/repos/:repoId/conventions<br/>triage board → create-skill modal"]
   CTX["/repos/:repoId/context<br/>Project Context (read-only)"]
@@ -35,8 +36,9 @@ flowchart TD
   SETTINGS["/settings/:section<br/>API keys · models"]
 
   PULLS -->|"GET /repos/:id/pulls · /repos/:id/index-state"| API
-  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/smart-diff<br/>GET /pulls/:id/blast · /pulls/:id/history · GET/POST /pulls/:id/intent · PUT /pulls/:id/intent/feedback<br/>GET/POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)"| API
-  AGENTS -->|"/agents · /agents/:id · /agents/:id/skills<br/>useAgentContextSet/useSetAgentContext → GET|PUT /agents/:id/context"| API
+  PR -->|"GET /pulls/:id · /reviews · /pulls/:id/comments · /pulls/:id/smart-diff<br/>GET /pulls/:id/blast · /pulls/:id/history · GET/POST /pulls/:id/intent · PUT /pulls/:id/intent/feedback<br/>GET/POST /pulls/:id/brief · POST /pulls/:id/review · /findings/:id/(accept|dismiss)<br/>Turn-into-eval-case modal (decided findings) → useEvalDraftRun → POST /agents/:id/eval-cases/draft-run"| API
+  AGENTS -->|"/agents · /agents/:id · /agents/:id/skills<br/>useAgentContextSet/useSetAgentContext → GET|PUT /agents/:id/context<br/>evals: useEvalCases/useEvalSweeps/useRunEvalSweep/usePromoteAgentVersion →<br/>GET|POST /agents/:id/eval-cases · PUT|DELETE …/:caseId · POST …/draft-run (or /:caseId/run)<br/>POST|GET /agents/:id/eval-runs · POST /agents/:id/versions/:version/promote"| API
+  EVAL -->|"useEvalOwners · useEvalDashboard →<br/>GET /eval/owners · GET /eval/dashboard(?owner_kind=&owner_id=)"| API
   SKILLS -->|"GET/POST /skills · GET/PUT/DELETE /skills/:id<br/>GET /skills/:id/versions · useImportSkillFromUrl → POST /skills/import-url<br/>useSkillContextSet/useSetSkillContext → GET|PUT /skills/:id/context"| API
   CONV -->|"GET /repos/:id/conventions · POST …/extract · POST …/skill<br/>PATCH/DELETE /conventions/:id · POST /agents/:id/skills (link)"| API
   CTX -->|"useProjectDocuments · useProjectDocument · useDocumentUsage · useRescanDocuments<br/>GET /repos/:id/documents · …/content?path= · …/usage · POST …/rescan"| API

@@ -32,6 +32,8 @@ Contract:
 
 <!-- newest on top -->
 
+- 2026-10-12 — The vendored MetricCard renders `value` verbatim and appends `suffix` after it — pass ONE of them, or percent values render doubled ("75%%"): format the % into `value` (e.g. via a pct helper) and omit `suffix`. (src/vendor/ui/charts/MetricCard.tsx:49, eval/_components/EvalDashboardView)
+
 - 2026-10-01 — Repo-intel resync returns before indexing finishes, and its status enum does not signal completion; capture `updatedAt`/`lastIndexedSha` before POST, poll `/index-state` until either changes, then invalidate the blast query so a degraded card refreshes in place. (src/app/repos/[repoId]/pulls/[number]/_components/BlastRadiusCard/BlastRadiusCard.tsx)
 
 - 2026-09-19 — `@/*` maps to `src/*` ONLY, so the 11 test imports of `messages/**/*.json` can never be alias-rewritten — their deep relative paths are the accepted residue of the F2 codemod, not missed sites; fixing them would need a second tsconfig/vitest alias (e.g. `@messages/*`). (src/app/**/*.test.tsx, tsconfig.json paths)
@@ -63,6 +65,8 @@ Contract:
 ## Recurring Errors & Fixes
 
 <!-- newest on top -->
+
+- 2026-10-12 — A page that renders an agent NAME in both a card and a picker `<select>` makes `getByText(name)` throw "found multiple elements", and `nameEl.closest("div")` lands on the card's INNER header row (not the card root), so sibling sections fall outside `within()` — scope with `getAllByText(name).find(el => el.tagName !== "OPTION")` and climb `.parentElement` to the intended card wrapper. (src/app/eval/_components/EvalDashboardView/EvalDashboardView.test.tsx ownerCard)
 
 - 2026-10-04 — Resolving a deferred fetch gate with the response BODY instead of a `res(...)`-wrapped Response silently converts a success into an ApiError (`res.ok` undefined → falsy branch, json() throws → caught), so a mutation write-through test fails as "card never left the none-state" with the trigger re-enabled and no visible error — wrap every `gate.resolve(...)` payload in the same `res()` helper the stub uses. (pulls/[number]/_components/PrBriefCard/PrBriefCard.test.tsx AC-2)
 - 2026-10-04 — DiffTab renders the PLAIN DiffViewer (all files, GitHub order) while smart-diff loads, so a deep-link test's `findByText(<file path>)` resolves against the wrong viewer and later "stays collapsed" assertions fail — await a role-group header (e.g. "Docs") before asserting group bodies. (pulls/[number]/_components/SmartDiffView/SmartDiffView.test.tsx focus case)

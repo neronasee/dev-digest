@@ -130,6 +130,24 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     });
   }
 
+  /**
+   * The run row goes terminal (done) slightly BEFORE its trace document is
+   * persisted — poll briefly so the served-trace assertions below don't race
+   * the write (flaked under full-lane parallel load; INSIGHTS 2026-10-02).
+   */
+  async function waitForTrace(runId: string) {
+    const start = Date.now();
+    for (;;) {
+      const [row] = await pg.handle.db
+        .select()
+        .from(t.runTraces)
+        .where(eq(t.runTraces.runId, runId));
+      if (row) return row.trace as unknown;
+      if (Date.now() - start > 5_000) throw new Error(`trace for ${runId} never persisted`);
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
+
   it('agents CRUD', async () => {
     const app = await appWith(REVIEW_FIXTURE);
 
@@ -414,6 +432,7 @@ d('A2 reviews + agents (Testcontainers pg)', () => {
     // Cost flows through the run summary and the persisted trace stats.
     const runs = (await app.inject({ method: 'GET', url: `/pulls/${pr.id}/runs` })).json();
     expect(runs[0].cost_usd).toBe(0.001);
+    await waitForTrace(r1.runs[0].run_id);
     const trace = (await app.inject({ method: 'GET', url: `/runs/${r1.runs[0].run_id}/trace` })).json();
     expect(trace.stats.cost_usd).toBe(0.001);
 

@@ -29,3 +29,7 @@ test-results/
 
 # brainstorm-agent decision briefs (local handoff artifacts, not shipped)
 docs/briefs/
+
+# pnpm v12 auto-writes a trivial lockfile (no deps) at the scripts-only root
+# on every `pnpm verify:l06` run — the root is not a package; ignore it.
+/pnpm-lock.yaml

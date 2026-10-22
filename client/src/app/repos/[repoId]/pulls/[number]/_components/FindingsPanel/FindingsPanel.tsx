@@ -56,11 +56,14 @@ export function FindingsPanel({
   prId,
   repoFullName,
   headSha,
+  onEvalCase,
 }: {
   findings: FindingRecord[];
   prId: string;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Threaded to every card's "Turn into eval case" (optional). */
+  onEvalCase?: (f: FindingRecord) => void;
 }) {
   const t = useTranslations("prReview");
   const action = useFindingAction();
@@ -143,6 +146,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              onEvalCase={onEvalCase}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

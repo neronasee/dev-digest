@@ -69,6 +69,28 @@ export interface ConfigChangePatch {
   repoIntel?: boolean;
 }
 
+/** Ordered array equality (promote's no-op check over snapshot skill ids). */
+export function arraysEqual(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/**
+ * Per-repo ordered context-set equality for promote's no-op check — compares
+ * the same set of (repo, ordered paths), independent of repo order.
+ */
+export function contextSetsEqual(
+  a: { repoId: string; paths: string[] }[],
+  b: { repoId: string; paths: string[] }[],
+): boolean {
+  const norm = (sets: { repoId: string; paths: string[] }[]) =>
+    sets
+      .slice()
+      .sort((x, y) => (x.repoId < y.repoId ? -1 : 1))
+      .map((s) => `${s.repoId}:${s.paths.join(',')}`)
+      .join('|');
+  return norm(a) === norm(b);
+}
+
 /**
  * True when a patch changes config (vs. just toggling `enabled`) relative to the
  * existing row — a config change bumps the version and snapshots agent_versions.

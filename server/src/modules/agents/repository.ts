@@ -2,9 +2,10 @@ import { and, asc, count, countDistinct, desc, eq, inArray } from 'drizzle-orm';
 import type { Db, DbOrTx } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 import type { CiFailOn, Provider, ReviewStrategy } from '@devdigest/shared';
+import { AgentVersionConfig } from '@devdigest/shared';
 import { AppError } from '../../platform/errors.js';
 import { DEFAULT_AGENT_DESCRIPTION, INITIAL_AGENT_VERSION } from './constants.js';
-import { isConfigChange } from './helpers.js';
+import { isConfigChange, arraysEqual, contextSetsEqual } from './helpers.js';
 
 /**
  * A2 — agents data-access. Owns `agents`, `agent_versions`, and the
@@ -231,11 +232,150 @@ export class AgentsRepository {
 
   /** A single config snapshot, or undefined if that version was never recorded. */
   async getVersion(agentId: string, version: number): Promise<AgentVersionRow | undefined> {
-    const [row] = await this.db
+    return this.getVersionIn(this.db, agentId, version);
+  }
+
+  private async getVersionIn(
+    client: DbOrTx,
+    agentId: string,
+    version: number,
+  ): Promise<AgentVersionRow | undefined> {
+    const [row] = await client
       .select()
       .from(t.agentVersions)
       .where(and(eq(t.agentVersions.agentId, agentId), eq(t.agentVersions.version, version)));
     return row;
+  }
+
+  /**
+   * Promote (restore) a past config snapshot onto the live agent (AC-27–AC-29).
+   * ONE transaction: snapshot read → config/skill/context restore → version
+   * bump + new snapshot commit together — a half-restored agent can never
+   * exist, and the restore itself is recorded as a new append-only version.
+   *
+   * - No-op equality (config fields + ordered live skill ids + context sets +
+   *   output_schema): promoting the LIVE config returns the current row
+   *   WITHOUT bumping the version (AC-29 server guard; the client disables the
+   *   button anyway).
+   * - Deleted skills are skipped (filtered to ids still existing in the
+   *   workspace — a deleted skill cannot come back); the appended snapshot
+   *   records the effective restored set.
+   * - Per-repo context docs restore directly, bypassing discovery validation
+   *   (a previously-valid config, not new input); repos that no longer exist
+   *   in the workspace are skipped (their rows cascaded away — the FK would
+   *   reject a dangling repo_id).
+   *
+   * Returns undefined when the agent OR that version doesn't exist in the
+   * workspace (route → 404).
+   */
+  async restoreVersion(
+    workspaceId: string,
+    agentId: string,
+    version: number,
+  ): Promise<AgentRow | undefined> {
+    return this.db.transaction(async (tx) => {
+      const existing = await this.getByIdIn(tx, workspaceId, agentId);
+      if (!existing) return undefined;
+      const snap = await this.getVersionIn(tx, agentId, version);
+      if (!snap) return undefined;
+      const parsed = AgentVersionConfig.safeParse(snap.configJson);
+      if (!parsed.success) {
+        throw new AppError(
+          'invalid_agent_version',
+          `Corrupt config snapshot for agent ${agentId} v${version}`,
+          500,
+          parsed.error.issues,
+        );
+      }
+      const cfg = parsed.data;
+
+      // Skill ids from the snapshot that still exist in THIS workspace, in
+      // snapshot order (tenancy guard — never link a foreign id).
+      const liveSkillIds =
+        cfg.skills.length > 0
+          ? new Set(
+              (
+                await tx
+                  .select({ id: t.skills.id })
+                  .from(t.skills)
+                  .where(and(eq(t.skills.workspaceId, workspaceId), inArray(t.skills.id, cfg.skills)))
+              ).map((r) => r.id),
+            )
+          : new Set<string>();
+      const restoredSkillIds = cfg.skills.filter((id) => liveSkillIds.has(id));
+
+      // Repos from the snapshot that still exist in THIS workspace.
+      const liveRepoIds =
+        cfg.context_docs.length > 0
+          ? new Set(
+              (
+                await tx
+                  .select({ id: t.repos.id })
+                  .from(t.repos)
+                  .where(
+                    and(
+                      eq(t.repos.workspaceId, workspaceId),
+                      inArray(
+                        t.repos.id,
+                        cfg.context_docs.map((d) => d.repo_id),
+                      ),
+                    ),
+                  )
+              ).map((r) => r.id),
+            )
+          : new Set<string>();
+      const restoredContext = cfg.context_docs
+        .filter((d) => liveRepoIds.has(d.repo_id))
+        .map((d) => ({ repoId: d.repo_id, paths: d.paths }));
+
+      // No-op check against what the restore would actually produce (AC-29).
+      const currentSkillIds = (await this.linkedSkillsWith(tx, agentId)).map((l) => l.skill.id);
+      const currentContext = await this.contextSetsWith(tx, agentId);
+      const isNoOp =
+        existing.provider === cfg.provider &&
+        existing.model === cfg.model &&
+        existing.systemPrompt === cfg.system_prompt &&
+        existing.strategy === cfg.strategy &&
+        existing.ciFailOn === cfg.ci_fail_on &&
+        existing.repoIntel === cfg.repo_intel &&
+        JSON.stringify(existing.outputSchema ?? null) === JSON.stringify(cfg.output_schema ?? null) &&
+        arraysEqual(currentSkillIds, restoredSkillIds) &&
+        contextSetsEqual(currentContext, restoredContext);
+      if (isNoOp) return existing;
+
+      // ---- restore (still inside the transaction) --------------------------
+      await tx
+        .update(t.agents)
+        .set({
+          provider: cfg.provider,
+          model: cfg.model,
+          systemPrompt: cfg.system_prompt,
+          outputSchema: (cfg.output_schema as object | undefined) ?? null,
+          strategy: cfg.strategy,
+          ciFailOn: cfg.ci_fail_on,
+          repoIntel: cfg.repo_intel,
+        })
+        .where(and(eq(t.agents.workspaceId, workspaceId), eq(t.agents.id, agentId)));
+
+      await tx.delete(t.agentSkills).where(eq(t.agentSkills.agentId, agentId));
+      if (restoredSkillIds.length > 0) {
+        await tx
+          .insert(t.agentSkills)
+          .values(restoredSkillIds.map((skillId, i) => ({ agentId, skillId, order: i })));
+      }
+
+      await tx.delete(t.agentContextDocs).where(eq(t.agentContextDocs.agentId, agentId));
+      if (restoredContext.length > 0) {
+        await tx.insert(t.agentContextDocs).values(
+          restoredContext.flatMap((d) =>
+            d.paths.map((path, i) => ({ agentId, repoId: d.repoId, path, order: i })),
+          ),
+        );
+      }
+
+      const fresh = await this.getByIdIn(tx, workspaceId, agentId);
+      return this.bumpVersionIn(tx, fresh!);
+    });
   }
 
   // ---- agent_skills link table (A2 owns the agent side) -------------------

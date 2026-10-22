@@ -22,6 +22,8 @@ interface FindingsTabProps {
   /** owner/repo + head sha — used to deep-link a finding's file:line to GitHub. */
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Threaded to every finding card's "Turn into eval case" (optional). */
+  onEvalCase?: (f: FindingRecord) => void;
   onOpenTrace: (id: string) => void;
   onDelete: (id: string) => void;
   onRunDone: () => void;
@@ -38,6 +40,7 @@ export function FindingsTab({
   cancelMutation,
   repoFullName,
   headSha,
+  onEvalCase,
   onOpenTrace,
   onDelete,
   onRunDone,
@@ -162,6 +165,7 @@ export function FindingsTab({
             defaultOpen={i === 0}
             repoFullName={repoFullName}
             headSha={headSha}
+            onEvalCase={onEvalCase}
             targetRunId={reviewTarget?.runId ?? null}
             targetRequest={reviewTarget?.request ?? 0}
           />
